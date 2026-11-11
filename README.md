@@ -3,7 +3,7 @@
 [![English](https://img.shields.io/badge/lang-English-1F6FEB)](README.md)
 [![Deutsch](https://img.shields.io/badge/lang-Deutsch-lightgrey)](README.de.md)
 
-[![Version 1.31.0](https://img.shields.io/badge/Version-1.31.0-orange)](CHANGELOG.md)
+[![Version 1.32.0](https://img.shields.io/badge/Version-1.31.0-orange)](CHANGELOG.md)
 [![Platform Windows | Linux | macOS](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078D6)](#platforms)
 [![Download](https://img.shields.io/badge/Download-Releases-2EA44F)](../../releases/latest)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
