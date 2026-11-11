@@ -30,7 +30,15 @@ Alles geschieht in einer grafischen Oberfläche: Die Disc entsteht als Knoten-Gr
 
 *Disc-Simulator: die Disc vor dem Brennen mit der virtuellen Fernbedienung durchklicken.*
 
-Getestet wird auf echten Playern und Fernsehern: **[HARDWARE_TESTS.md](HARDWARE_TESTS.md)**.
+## Stand
+
+OpenBDAuth wird von einer Person entwickelt und auf der vorhandenen Hardware getestet:
+
+- **Player:** Sony UBP-X700, Sony BDP-S4200, PlayStation 3 und ein Panasonic DMP-BDT111EG (2D, 3D, Menüs, Kapitel, Ton- und Untertitelwahl – Einzelheiten in **[HARDWARE_TESTS.md](HARDWARE_TESTS.md)**). Andere Player können sich anders verhalten; der HDMV-Standard lässt Spielraum.
+- **Brennen:** bestätigt unter Windows und macOS mit einem Laufwerk (HL-DT-ST BP40NS20, BD-RE). Brennen unter Linux ist neu und wird gerade getestet.
+- **Software-Player** wie VLC können Blu-ray-Menüs nur teilweise. Kodi oder ein Hardware-Player zeigen verlässlicher, wie die Disc wirkt.
+
+Bevor du viele Discs brennst, teste eine auf deinem Player – dafür eignet sich eine BD-RE. Rückmeldungen mit dem Player-Modell sind sehr willkommen.
 
 ---
 

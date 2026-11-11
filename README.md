@@ -30,7 +30,15 @@ Everything happens in a graphical interface: the disc is built as a node graph, 
 
 *Disc simulator: click through the disc with a virtual remote before burning.*
 
-Tested on real players and TVs: **[HARDWARE_TESTS.md](HARDWARE_TESTS.md)** (German).
+## Status
+
+OpenBDAuth is developed by one person and tested on the hardware at hand:
+
+- **Players:** Sony UBP-X700, Sony BDP-S4200, PlayStation 3 and a Panasonic DMP-BDT111EG (2D, 3D, menus, chapters, audio and subtitle selection – details in **[HARDWARE_TESTS.md](HARDWARE_TESTS.md)**, German). Other players may behave differently; the HDMV standard leaves room for interpretation.
+- **Burning:** confirmed on Windows and macOS with one drive (HL-DT-ST BP40NS20, BD-RE). Burning on Linux is new and currently being tested.
+- **Software players** such as VLC support Blu-ray menus only partly. Kodi or a hardware player give a more reliable picture.
+
+Before burning many discs, test one on your player – a BD-RE is ideal for that. Feedback with your player model is very welcome.
 
 ---
 
