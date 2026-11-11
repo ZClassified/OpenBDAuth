@@ -14,7 +14,7 @@ der mit tsMuxeR zu einer 3D-Blu-ray gemuxt werden kann.
 |---|---|---|---|
 | 0 | – | Bitstream-Analyzer (`mvctools.analyze`) und Auswertung von Referenzmaterial | Analyzer fertig; Ergebnisse in [mvc-wissen.md](mvc-wissen.md) |
 | 1 | [phase-1-simulcast.md](phase-1-simulcast.md) | MVC **ohne** Inter-View-Prädiktion: 2× x264 + eigener MVC-Rewriter | Player-Test bestanden, in BD3DEnc v0.7.0 integriert, v0.7.1 mit Szenenwechsel-IDR und höheren VBV-Grenzen; Langzeittests offen |
-| 2 | [phase-2-interview.md](phase-2-interview.md) | Echtes MVC **mit** Inter-View-Prädiktion (eigener Code) | geplant – erst nach der OpenBDAuth-Integration |
+| 2 | [phase-2-interview.md](phase-2-interview.md) | Echtes MVC **mit** Inter-View-Prädiktion (eigener Code) | geplant (Weg A: x264-Patch, gleicher QP auf beiden Augen); Entwicklung in eigenem Repository, Übernahme als fertiges Bauteil |
 
 Gesammeltes Wissen, Spezifikationsdetails und offene Fragen: [mvc-wissen.md](mvc-wissen.md)
 
@@ -48,7 +48,7 @@ ersetzt sie aber nicht – Phase 1 bleibt als robuster Fallback-Modus im Tool er
 ## Zukunft des Codes
 
 `mvctools/` und dieses Verzeichnis wandern bei der Integration in OpenBDAuth unverändert dorthin; die
-MVC-Weiterentwicklung (Phase 2) geht danach dort weiter. Siehe [../integration-openbdauth.md](../integration-openbdauth.md)
+MVC-Weiterentwicklung (Phase 2) wird laut Entscheidung vom 2026-11-11 in einem eigenen Repository entwickelt und kommt als fertiges Bauteil zurück. Siehe [../integration-openbdauth.md](../integration-openbdauth.md)
 und die Gesamtübersicht [../README.md](../README.md).
 
 ## Ablage
