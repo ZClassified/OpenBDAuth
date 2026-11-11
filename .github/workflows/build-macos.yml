@@ -1,0 +1,63 @@
+# macOS-Paket bauen: auf GitHub unter Actions → "macOS-Paket" → "Run workflow" starten.
+# Ergebnis: OpenBDAuth-<Version>-macos.dmg unten auf der Seite des Laufs (Artifacts), 14 Tage abrufbar.
+# Nur Apple Silicon (M1 und neuer) ab macOS 13: tsMuxeR 2.7.0 gibt es für Mac nur als arm64, Qt 6.11 braucht
+# macOS 13. Ohne Apple-Developer-ID ist die App nur ad hoc signiert – den ersten Start erlaubt der Nutzer einmal
+# unter Systemeinstellungen → Datenschutz & Sicherheit → "Trotzdem öffnen".
+
+name: macOS-Paket
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12.9"
+
+      # Dieselben Versionen wie in THIRD_PARTY_LICENSES.md
+      - name: Python-Pakete
+        run: pip install PySide6==6.11.2 Pillow==12.1.0 pyinstaller==6.22.0
+
+      - name: Downloads zwischenspeichern
+        uses: actions/cache@v6
+        with:
+          path: build/downloads
+          key: tools-macos-${{ hashFiles('tools/fetch_tools.py') }}
+
+      # Werkzeuge holen, PyInstaller (.app), Werkzeuge hinein, neu signieren, Selbsttest, Disk-Image
+      - name: Paket bauen
+        run: python tools/build_release.py
+
+      # Fenster einmal öffnen: Läuft das Programm nach 20 Sekunden noch, ist der Start gelungen
+      - name: Startversuch mit Fenster
+        run: |
+          dist/OpenBDAuth/OpenBDAuth.app/Contents/MacOS/OpenBDAuth &
+          pid=$!
+          sleep 20
+          if ! kill -0 $pid 2>/dev/null; then
+            wait $pid
+            echo "OpenBDAuth hat sich beendet (Rückgabewert $?)"
+            exit 1
+          fi
+          kill $pid
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: OpenBDAuth-macos
+          path: dist/OpenBDAuth-*-macos.dmg
+          compression-level: 0
+          retention-days: 14
+
+      # Testsuite: nur zur Information, das Paket steht oben schon bereit
+      - name: Tests
+        continue-on-error: true
+        timeout-minutes: 20
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m unittest discover -s tests -t .

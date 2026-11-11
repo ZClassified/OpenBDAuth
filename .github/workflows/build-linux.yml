@@ -1,0 +1,70 @@
+# Linux-Paket bauen: auf GitHub unter Actions → "Linux-Paket" → "Run workflow" starten.
+# Ergebnis: OpenBDAuth-<Version>-linux.tar.gz unten auf der Seite des Laufs (Artifacts), 14 Tage abrufbar.
+# Gebaut auf Ubuntu 22.04, damit das Paket auch auf älteren Systemen läuft (glibc 2.35: Ubuntu 22.04,
+# Debian 12, Fedora 36, Mint 21 und neuer).
+
+name: Linux-Paket
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12.9"
+
+      # Bibliotheken, die Qt unter X11 braucht (PyInstaller nimmt das xcb-Plugin samt Abhängigkeiten mit),
+      # dazu xvfb für den Startversuch mit Fenster und xorriso nur für die Tests (Brand auf ein Pseudo-Laufwerk,
+      # v1.31.0) – das Paket enthält es nicht, Nutzer installieren es selbst
+      - name: Systempakete
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libfontconfig1 libdbus-1-3 libxkbcommon-x11-0 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-image0 libxcb-render-util0 \
+            libxcb-shape0 libxcb-xinerama0 libxcb-randr0 xvfb xorriso
+
+      # Dieselben Versionen wie im Windows-Paket (THIRD_PARTY_LICENSES.md)
+      - name: Python-Pakete
+        run: pip install PySide6==6.11.2 Pillow==12.1.0 pyinstaller==6.22.0
+
+      - name: Downloads zwischenspeichern
+        uses: actions/cache@v6
+        with:
+          path: build/downloads
+          key: tools-linux-${{ hashFiles('tools/fetch_tools.py') }}
+
+      # Werkzeuge holen, PyInstaller, Lizenzen, Selbsttest (Encoding 2D und 3D), Archiv
+      - name: Paket bauen
+        run: python tools/build_release.py
+
+      # Fenster einmal öffnen: Lädt Qt das xcb-Plugin nicht, bricht das Programm sofort ab. Läuft es nach
+      # 20 Sekunden noch, beendet timeout es mit 124 – dann ist alles gut.
+      - name: Startversuch mit Fenster
+        run: |
+          set +e
+          timeout 20 xvfb-run -a dist/OpenBDAuth/OpenBDAuth
+          code=$?
+          echo "Rückgabewert: $code"
+          test $code -eq 124
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: OpenBDAuth-linux
+          path: dist/OpenBDAuth-*-linux.tar.gz
+          compression-level: 0
+          retention-days: 14
+
+      # Testsuite unter Linux: nur zur Information, das Paket steht oben schon bereit
+      - name: Tests
+        continue-on-error: true
+        timeout-minutes: 20
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m unittest discover -s tests -t .

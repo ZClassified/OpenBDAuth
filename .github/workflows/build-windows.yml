@@ -1,0 +1,72 @@
+# Windows-Paket bauen: auf GitHub unter Actions → "Windows-Paket" → "Run workflow" starten.
+# Ergebnis unten auf der Seite des Laufs (Artifacts), 14 Tage abrufbar: OpenBDAuth-windows-setup (Installer) und
+# OpenBDAuth-windows (ZIP zum Entpacken, ohne Installation).
+
+name: Windows-Paket
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12.9"
+
+      # Dieselben Versionen wie in THIRD_PARTY_LICENSES.md
+      - name: Python-Pakete
+        run: pip install PySide6==6.11.2 Pillow==12.1.0 comtypes==1.4.16 pyinstaller==6.22.0
+
+      - name: Downloads zwischenspeichern
+        uses: actions/cache@v6
+        with:
+          path: build/downloads
+          key: tools-windows-${{ hashFiles('tools/fetch_tools.py') }}
+
+      # Werkzeuge holen, PyInstaller, Lizenzen, Selbsttest (Encoding 2D und 3D), ZIP, Installer (Inno Setup ist
+      # auf den Windows-Rechnern von GitHub vorinstalliert)
+      - name: Paket bauen
+        run: python tools/build_release.py --installer
+
+      # Installer still ausführen und die installierte Version einmal mit Fenster starten: Läuft sie nach
+      # 20 Sekunden noch, ist der Start gelungen
+      - name: Installieren und starten
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist/OpenBDAuth-Setup-*.exe | Select-Object -First 1
+          Start-Process -FilePath $setup.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER" -Wait
+          $exe = "$env:LOCALAPPDATA\Programs\OpenBDAuth\OpenBDAuth.exe"
+          if (-not (Test-Path $exe)) { Write-Error "Nach der Installation fehlt $exe"; exit 1 }
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 20
+          if ($p.HasExited) { Write-Error "OpenBDAuth hat sich beendet (Rückgabewert $($p.ExitCode))"; exit 1 }
+          Stop-Process -Id $p.Id -Force
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: OpenBDAuth-windows-setup
+          path: dist/OpenBDAuth-Setup-*.exe
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: OpenBDAuth-windows
+          path: dist/OpenBDAuth-*-windows.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      # Testsuite: nur zur Information, das Paket steht oben schon bereit
+      - name: Tests
+        continue-on-error: true
+        timeout-minutes: 20
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m unittest discover -s tests -t .

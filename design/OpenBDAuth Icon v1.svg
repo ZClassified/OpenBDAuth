@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Hintergrund -->
+  <rect x="0" y="0" width="1024" height="1024" rx="256" ry="256" fill="#18181B"/>
+  <!-- Verbindungslinien (vor den Boxen, damit deren Füllung die Linienenden abdeckt) -->
+  <g fill="none" stroke="#24A8FB" stroke-width="20" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M326.8 286.76 H437.58 V737.24 H326.8"/>
+    <path d="M326.8 512 H586.4"/>
+  </g>
+  <!-- Drei Boxen -->
+  <g fill="#18181B" stroke="#24A8FB" stroke-width="20">
+    <rect x="176.6" y="211.68" width="150.16" height="150.16" rx="37.54" ry="37.54"/>
+    <rect x="176.6" y="436.92" width="150.16" height="150.16" rx="37.54" ry="37.54"/>
+    <rect x="176.6" y="662.16" width="150.16" height="150.16" rx="37.54" ry="37.54"/>
+  </g>
+  <!-- Halbe Disc mit Ausschnitt -->
+  <path d="M512 93.6 A418.4 418.4 0 0 1 512 930.4 V586.42 A74.42 74.42 0 0 0 512 437.58 Z" fill="#24A8FB"/>
+</svg>
