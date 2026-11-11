@@ -11,7 +11,7 @@ Letzte Version, mit der eine Funktion auf dem Gerät bestätigt wurde.
 
 | Player | Baujahr | Zuletzt getestet | Filme 2D | Filme 3D | Menü | Menüseiten wechseln | Kapitelsprung | Ton-/Untertitelwahl im Menü |
 |---|---|---|---|---|---|---|---|---|
-| Sony UBP-X700 | 2018 | v1.13.1 | ✅ v1.13.0 | ✅ v1.8.5 | ✅ v1.13.0 (Form-Buttons Dreieck und Kreis, zwei Hintergründe) | ✅ v1.13.1 (auch zwischen Menü-Playlists; Seite und Button überstehen die Menü-Schleife) | ✅ v1.8.5 (2D und 3D) | ✅ v1.13.0 (Ton und Untertitel) |
+| Sony UBP-X700 | 2018 | v1.32.0 | ✅ v1.13.0 | ✅ v1.8.5 | ✅ v1.32.0 (7 Menüs; Form-Buttons Dreieck und Kreis ab v1.13.0) | ✅ v1.13.1 (auch zwischen Menü-Playlists; Seite und Button überstehen die Menü-Schleife) | ✅ v1.32.0 (Taste „Nächstes Kapitel“ im Film; 2D und 3D ab v1.8.5) | ✅ v1.13.0 (Ton und Untertitel) |
 | Sony BDP-S4200 | 2014 | v1.18.1 | ✅ v1.17.7 | ✅ v1.4.0 | ✅ v1.18.1 (7 Menüs; Filmende im Extras-Menü, Trailer vor dem Menü) | ✅ v1.17.7 (zwischen 7 Menü-Playlists) | ✅ v1.17.7 | ✅ v1.17.7 (Ton und Untertitel) |
 | Sony PlayStation 3 | – | v1.9.7 | ⚠ v1.9.7 (kein Ton) | – | ✅ v1.9.7 | ✅ v1.9.7 | ✅ v1.9.7 | ✅ v1.9.7 (Untertitel an/aus; Ton nicht prüfbar) |
 | Panasonic DMP-BDT111EG | – | v1.17.7 | ❌ v1.17.7 (ruckelt, wie schon immer) | ❌ bleibt stehen | ✅ v1.17.7 (7 Menüs) | ✅ v1.17.7 | ✅ v1.17.7 | – |
@@ -47,7 +47,8 @@ Der Panasonic hat sich in früheren Versionen als besonders strenger Player erwi
 | Player | Fernseher | Ergebnis | Bemerkung |
 |---|---|---|---|
 | VLC 3.0.24 (Windows) | – | ⚠ | Mit Videoausgabe **Direct3D9** (war eingestellt) bleibt nach „Kapitel“ die Grafik des Hauptmenüs stehen, nach einem Kapitel laufen Film und Untertitel unter der Menügrafik – bei jeder ISO (auch v1.29.0 und Mac-Export). Mit **Direct3D11** läuft das Menü richtig; mit OpenGL ignoriert VLC das Menü. „Nächstes Kapitel“ in VLC springt ins Menü – in Kodi richtig, auf den Playern ging der Kapitelsprung immer; also VLC. Simulator: 0 Fehler (wie v1.17.7). |
-| Kodi (Windows) | – | ✅ | Menüs, Wechsel ins Kapitelmenü und Film laufen richtig (Blu-ray-Menü-Modus, libbluray wie VLC). „Nächstes Kapitel“ springt richtig; die Zeitleiste zeigt dabei kurz den Filmanfang bzw. „-2:32“, dann die richtige Stelle – vermutlich nur Anzeige, auf einem Player beobachten. |
+| Kodi (Windows) | – | ✅ | Menüs, Wechsel ins Kapitelmenü und Film laufen richtig (Blu-ray-Menü-Modus, libbluray wie VLC). „Nächstes Kapitel“ springt richtig; die Zeitleiste zeigt dabei kurz den Filmanfang bzw. „-2:32“, dann die richtige Stelle – vermutlich nur Anzeige; auf dem Sony UBP-X700 nicht aufgetreten, also Kodi. |
+| Sony UBP-X700 | nicht erfasst | ✅ | Diese unter Windows gebrannte Disc (bitgleich zum macOS-Export), getestet mit v1.32.0: Menüs laufen; „Nächstes Kapitel“ per Taste im Film springt richtig zum nächsten Kapitel, ohne auffällige Zeitanzeige oder Sprünge. Bestätigt: Das Springen ins Menü in VLC und die kurze falsche Zeit in Kodi sind Fehler der Software-Player, nicht der Disc. |
 
 ### 2026-11-11 · v1.30.0 · Projekt „D4A“ · `D4A.iso` · erster Brand aus OpenBDAuth (macOS)
 
