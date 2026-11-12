@@ -48,6 +48,15 @@ def date_text(release: Release, lang: str) -> str:
 
 
 RELEASES: Tuple[Release, ...] = (
+    Release("1.32.2", "2026-11-12",
+            de=Notes("Hinweis im Simulator", (
+                "Bei der Simulation aus dem Projekt sagt ein Hinweis, dass keine Filmbilder gezeigt werden. "
+                "Standbilder gibt es beim Öffnen der fertigen Disc.",
+            )),
+            en=Notes("Hint in the simulator", (
+                "When simulating from the project, a hint explains that no film images are shown. Stills appear "
+                "when you open the finished disc.",
+            ))),
     Release("1.32.1", "2026-11-12",
             de=Notes("Korrektur für Linux", (
                 "Im Linux-Paket starten Programme vom System wieder zuverlässig, etwa zum Öffnen von ISOs im "

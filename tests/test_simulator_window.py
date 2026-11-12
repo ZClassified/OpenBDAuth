@@ -52,6 +52,13 @@ class TestSimulatorWindow(unittest.TestCase):
                     self.assertEqual(len(rgba), w * h * 4)
                     self.assertTrue(any(rgba[3::4]), "Grafik ist vollständig transparent")
 
+    def test_hint_without_frames(self):
+        # isHidden statt isVisible: Das Fenster ist im Test nicht gezeigt
+        self.assertFalse(self.window.preview_hint.isHidden())
+        with_frames = SimulatorWindow(self.disc, frames=True)
+        self.addCleanup(with_frames.deleteLater)
+        self.assertTrue(with_frames.preview_hint.isHidden())
+
     def test_starts_in_main_menu(self):
         w = self.window
         self.assertEqual(w.player.state, STATE_MENU)

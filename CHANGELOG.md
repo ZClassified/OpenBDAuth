@@ -5,6 +5,12 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.32.2] - 2026-11-12
+
+### Geändert
+
+- **Simulator:** Bei der Simulation aus dem Projekt erklärt ein kurzer Hinweis, dass keine Filmbilder gezeigt werden und wo es Standbilder gibt (fertige Disc öffnen).
+
 ## [1.32.1] - 2026-11-12
 
 ### Behoben
