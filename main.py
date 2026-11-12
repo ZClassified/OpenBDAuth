@@ -40,6 +40,8 @@ def main():
 if __name__ == "__main__":
     import multiprocessing
     multiprocessing.freeze_support()   # Prüf- und Encoding-Prozesse im fertigen Paket (modules/prepare/background.py)
+    from modules.external_tools import restore_system_library_path
+    restore_system_library_path()      # Linux-Paket: Systemprogramme mit ihren eigenen Bibliotheken starten
     if "--selbsttest" in sys.argv:     # Paket ohne Fenster prüfen (modules/prepare/selftest.py, build_release.py)
         from modules.prepare.selftest import main as selftest
         sys.exit(selftest())

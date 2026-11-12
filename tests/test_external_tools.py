@@ -76,3 +76,36 @@ class TestPlatforms(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSystemLibraryPath(unittest.TestCase):
+    """Linux-Paket: Kindprozesse bekommen den Bibliothekspfad von vor dem Start zurück."""
+
+    def restore(self, env, frozen=True, platform="linux"):
+        return et.restore_system_library_path(env, frozen=frozen, platform=platform)
+
+    def test_original_value_comes_back(self):
+        env = {"LD_LIBRARY_PATH": "/app/_internal", "LD_LIBRARY_PATH_ORIG": "/opt/lib"}
+        self.assertTrue(self.restore(env))
+        self.assertEqual(env, {"LD_LIBRARY_PATH": "/opt/lib"})
+
+    def test_empty_original_removes_variable(self):
+        env = {"LD_LIBRARY_PATH": "/app/_internal", "LD_LIBRARY_PATH_ORIG": ""}
+        self.assertTrue(self.restore(env))
+        self.assertEqual(env, {})
+
+    def test_without_original_variable_is_removed(self):
+        env = {"LD_LIBRARY_PATH": "/app/_internal", "HOME": "/home/x"}
+        self.assertTrue(self.restore(env))
+        self.assertEqual(env, {"HOME": "/home/x"})
+
+    def test_nothing_to_do(self):
+        env = {"HOME": "/home/x"}
+        self.assertFalse(self.restore(env))
+        self.assertEqual(env, {"HOME": "/home/x"})
+
+    def test_source_start_and_other_systems_untouched(self):
+        for frozen, platform in ((False, "linux"), (True, "win32"), (True, "darwin")):
+            env = {"LD_LIBRARY_PATH": "/x", "LD_LIBRARY_PATH_ORIG": "/y"}
+            self.assertFalse(self.restore(env, frozen=frozen, platform=platform))
+            self.assertEqual(env, {"LD_LIBRARY_PATH": "/x", "LD_LIBRARY_PATH_ORIG": "/y"})

@@ -48,6 +48,15 @@ def date_text(release: Release, lang: str) -> str:
 
 
 RELEASES: Tuple[Release, ...] = (
+    Release("1.32.1", "2026-11-12",
+            de=Notes("Korrektur für Linux", (
+                "Im Linux-Paket starten Programme vom System wieder zuverlässig, etwa zum Öffnen von ISOs im "
+                "Simulator oder zum Brennen.",
+            )),
+            en=Notes("Fix for Linux", (
+                "In the Linux package, system programs start reliably again, for example to open ISOs in the "
+                "simulator or to burn.",
+            ))),
     Release("1.32.0", "2026-11-11",
             de=Notes("Brennen jetzt auch unter Windows", (
                 "Der Bereich Brennen funktioniert unter Windows mit dem eingebauten Brenndienst, ohne "

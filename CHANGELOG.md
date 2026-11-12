@@ -5,6 +5,12 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.32.1] - 2026-11-12
+
+### Behoben
+
+- **Linux-Paket:** Programme vom System (z. B. zum Einhängen von ISOs im Simulator oder zum Brennen) konnten auf manchen Distributionen nicht starten. Sie laufen jetzt wieder mit den Bibliotheken des Systems.
+
 ## [1.32.0] - 2026-11-11
 
 ### Brennen unter Windows (IMAPI2)

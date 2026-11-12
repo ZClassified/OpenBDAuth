@@ -98,3 +98,26 @@ def tool_path(tool: str) -> str:
 
 def missing_tools(tools: Sequence[str] = REQUIRED) -> List[str]:
     return [t for t in tools if find_tool(t) is None]
+
+
+def restore_system_library_path(environ=None, frozen: Optional[bool] = None, platform: Optional[str] = None) -> bool:
+    """Linux-Paket: den Suchpfad für Bibliotheken für Kindprozesse wiederherstellen.
+
+    Der PyInstaller-Starter setzt LD_LIBRARY_PATH auf den Paketordner und merkt sich den alten Wert in
+    LD_LIBRARY_PATH_ORIG. Programme vom System, die wir aufrufen, würden sonst die mitgelieferten Bibliotheken
+    statt der eigenen laden und können daran scheitern. Das laufende Programm selbst betrifft das nicht: Der
+    Linker liest die Variable nur beim Start. Liefert True, wenn etwas geändert wurde.
+    """
+    environ = os.environ if environ is None else environ
+    frozen = getattr(sys, "frozen", False) if frozen is None else frozen
+    platform = sys.platform if platform is None else platform
+    if not frozen or not platform.startswith("linux"):
+        return False
+    if "LD_LIBRARY_PATH_ORIG" in environ:
+        original = environ.pop("LD_LIBRARY_PATH_ORIG")
+        if original:
+            environ["LD_LIBRARY_PATH"] = original
+        else:
+            environ.pop("LD_LIBRARY_PATH", None)
+        return True
+    return environ.pop("LD_LIBRARY_PATH", None) is not None
