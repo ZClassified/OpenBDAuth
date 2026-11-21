@@ -29,7 +29,9 @@ from gui.studio.widgets import DropFrame, ElidedLabel, fill_combo, hint_label
 from modules.burn import checks
 from modules.burn.iso_info import IsoInfo, read_iso_info
 from modules.burn.job import BurnRun, MAX_COPIES, should_eject
-from modules.burn.model import BurnOptions, Drive, Media, PHASE_VERIFY, SPEED_AUTO
+from modules.burn.model import (
+    BurnOptions, Drive, Media, PHASE_VERIFY, PHASE_WRITE, SPEED_AUTO, auto_speed, resolve_speed, speed_factor,
+)
 
 POLL_MS = 200
 PROBE_MS = 3000
@@ -51,6 +53,12 @@ RESULT_COLOR = {"ok": "#4ADE80", "fail": "#F87171", "info": "#A1A1AA"}
 def _gb(n: int, lang: str) -> str:
     from gui.studio.export_activity import format_bytes
     return format_bytes(n, lang)
+
+
+def speed_text(label: str) -> str:
+    """„4x“ / „4“ (macOS) → „4×“."""
+    factor = speed_factor(label)
+    return f"{factor:g}×" if factor is not None else label
 
 
 def _same_path(a: str, b: str) -> bool:
@@ -91,6 +99,7 @@ class BurnPage(QWidget):
         self.eject_after = True
         self.verify_after = False
         self.speed = SPEED_AUTO
+        self._burn_rewritable = False                # Medium des laufenden Brands (für den Hinweis nach Fehlern)
         self.prepare_running = lambda: False     # setzt das Studio: läuft die Warteschlange in Vorbereiten?
         self.run: Optional[BurnRun] = None
         self._copy = 0
@@ -347,6 +356,7 @@ class BurnPage(QWidget):
         self.lbl_burner_title.setText(self.t("burn_burner"))
         self.btn_eject.setText(self.t("burn_eject"))
         self.lbl_speed.setText(self.t("burn_speed"))
+        self.combo_speed.setToolTip(self.t("burn_speed_tip"))
         self.lbl_copies.setText(self.t("burn_copies"))
         self.chk_verify.setText(self.t("burn_verify"))
         self.chk_verify.setToolTip(self.t("burn_verify_tip"))
@@ -621,9 +631,12 @@ class BurnPage(QWidget):
 
     def _update_speed_combo(self):
         speeds = self.media.speeds if self.media is not None and self.media.present else []
-        entries = [(SPEED_AUTO, self.t("burn_speed_auto"))] + [(s, s.replace("x", "×")) for s in speeds]
+        auto = auto_speed(speeds)
+        auto_text = (self.t("burn_speed_auto_value", speed=speed_text(auto)) if auto
+                     else self.t("burn_speed_auto"))
+        entries = [(SPEED_AUTO, auto_text)] + [(s, speed_text(s)) for s in speeds]
         if self.speed and self.speed not in speeds:
-            entries.append((self.speed, self.speed.replace("x", "×")))   # gemerkte Wahl bleibt sichtbar
+            entries.append((self.speed, speed_text(self.speed)))   # gemerkte Wahl bleibt sichtbar
         fill_combo(self.combo_speed, entries, self.speed)
 
     def _update_recent(self):
@@ -776,12 +789,20 @@ class BurnPage(QWidget):
 
     def _start_copy(self):
         drive = self.selected_drive()
-        options = BurnOptions(speed=self.speed, verify=self.verify_after,
+        speed = resolve_speed(self.speed, self.media)
+        options = BurnOptions(speed=speed, verify=self.verify_after,
                               erase=bool(self.media is not None and self.media.needs_erase))
+        self._burn_rewritable = bool(self.media is not None and self.media.is_rewritable)
         eject = should_eject(self._copy, self._copies, self.eject_after)
         if self._copies > 1:
             self._log(self.t("burn_log_copy", n=self._copy, total=self._copies))
         self._log(self.t("burn_log_start", iso=self.iso_path, drive=drive.name))
+        if not speed:
+            self._log(self.t("burn_log_speed_drive"))
+        elif self.speed:
+            self._log(self.t("burn_log_speed", speed=speed_text(speed)))
+        else:
+            self._log(self.t("burn_log_speed_auto", speed=speed_text(speed)))
         self._show_result("info", "")
         self.progress.setValue(0)
         self.progress.setVisible(True)
@@ -849,7 +870,11 @@ class BurnPage(QWidget):
                                   else "burn_result_cancelled")
         if outcome.phase == PHASE_VERIFY:
             return "fail", self.t("burn_result_verify_failed", err=outcome.error)
-        return "fail", self.t("burn_result_failed", err=outcome.error)
+        text = self.t("burn_result_failed", err=outcome.error)
+        if outcome.phase == PHASE_WRITE:          # das Laufwerk hat die Disc nicht fertig geschrieben
+            text += "\n" + self.t("burn_hint_write_failed_rewritable" if self._burn_rewritable
+                                   else "burn_hint_write_failed")
+        return "fail", text
 
     def _on_copy_done(self, run: BurnRun):
         outcome = run.outcome

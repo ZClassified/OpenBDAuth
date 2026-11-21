@@ -48,6 +48,22 @@ def date_text(release: Release, lang: str) -> str:
 
 
 RELEASES: Tuple[Release, ...] = (
+    Release("1.33.0", "2026-11-21",
+            de=Notes("Sichereres Brennen", (
+                "„Automatisch“ brennt jetzt mit höchstens 4× statt mit der höchsten Stufe des Laufwerks. Das schont "
+                "Rohling und Brenner; eine ausdrücklich gewählte Stufe bleibt.",
+                "Nach einem Schreibfehler sagt das Programm, was das für die Disc heißt und was beim nächsten "
+                "Versuch hilft.",
+                "Unter Windows zeigt das Protokoll die tatsächliche Geschwindigkeit, Zeit und Restzeit, den echten "
+                "Fehlercode und nach einem Fehler, wie weit gebrannt wurde.",
+            )),
+            en=Notes("Safer burning", (
+                "“Automatic” now burns at 4× at most instead of the drive's highest speed. This is easier on disc "
+                "and burner; a speed you choose yourself is kept.",
+                "After a write error, the app explains what this means for the disc and what helps next time.",
+                "On Windows, the log shows the actual speed, elapsed and remaining time, the real error code and, "
+                "after an error, how far the burn got.",
+            ))),
     Release("1.32.2", "2026-11-12",
             de=Notes("Hinweis im Simulator", (
                 "Bei der Simulation aus dem Projekt sagt ein Hinweis, dass keine Filmbilder gezeigt werden. "

@@ -18,6 +18,12 @@ Werte aus einem echten Lauf (HL-DT-ST BP40NS20 über USB, BD-RE mit Daten, 2026-
 - Lesen über \\\\.\\I: geht ohne Admin-Rechte. Die Größe liefert nicht seek(END), sondern
   IOCTL_DISK_GET_LENGTH_INFO (verify.device_size): bei der BD-RE die ganze physische Disc (12 219 392 Sektoren).
 
+Fehlbrand (BD-R, 18 GB, ohne gewählte Geschwindigkeit = 6x, 2026-11-21): Write meldete nach CurrentAction 5
+(Abschließen) DISP_E_EXCEPTION 0x80020009 mit „Das Laufwerk hat Fehlerinformationen zurückgegeben. Der Fehler ist nicht
+behebbar.“ Lesbar waren danach 98,6 % (bis LBA 8 674 911), Status nur NON_EMPTY_SESSION. Der eigentliche Code steht in
+EXCEPINFO.scode (comtypes: details[4]); IMAPI2s RemainingTime war ab 30 % nur noch 0 s. Daher: „Automatisch“ höchstens
+4x (model.auto_speed), echte Geschwindigkeit, eigene Zeit/Rate und der Zustand nach einem Fehler im Protokoll.
+
 Brennen: die ISO als IStream (SHCreateStreamOnFileEx, nur lesend) an IDiscFormat2Data.Write. Write schreibt den
 Datenstrom roh, Sektor für Sektor – anders als IMAPI2FS (Dateisystem-Abbild), das in v1.18.1 entfernt wurde.
 ForceMediaToBeClosed schließt die Disc ab. Fortschritt über DDiscFormat2DataEvents.Update; Abbrechen mit
@@ -63,6 +69,10 @@ STATE_NAMES = [(STATE_OVERWRITE_ONLY, "overwrite only"), (STATE_BLANK, "blank"),
 # IMAPI_FORMAT2_DATA_WRITE_ACTION
 ACTION_VALIDATING, ACTION_FORMATTING, ACTION_INIT_HW, ACTION_CALIBRATING = 0, 1, 2, 3
 ACTION_WRITING, ACTION_FINALIZATION, ACTION_COMPLETED, ACTION_VERIFYING = 4, 5, 6, 7
+ACTION_NAMES = {ACTION_VALIDATING: "Prüfen der Disc", ACTION_FORMATTING: "Formatieren",
+                ACTION_INIT_HW: "Laufwerk vorbereiten", ACTION_CALIBRATING: "Laser kalibrieren",
+                ACTION_WRITING: "Schreiben", ACTION_FINALIZATION: "Abschließen", ACTION_COMPLETED: "Fertig",
+                ACTION_VERIFYING: "Stichprobe"}
 
 BD_WRITE_PROFILES = {0x41, 0x42, 0x43}          # BD-R sequentiell, BD-R random, BD-RE
 BD_1X_SECTORS = 4_500_000 / 2048                # 1x Blu-ray = 36 Mbit/s ≈ 2197 Sektoren/s
@@ -131,12 +141,70 @@ def hresult(code: int) -> int:
     return code & 0xFFFFFFFF
 
 
-def com_error_text(error) -> str:
-    """Text eines COMError (IMAPI2 legt die eigentliche Meldung in details[0])."""
-    details = getattr(error, "details", None) or ()
-    text = str(details[0]).strip() if details and details[0] else (getattr(error, "text", "") or str(error))
+def _details(error) -> tuple:
+    details = getattr(error, "details", None)
+    return details if isinstance(details, tuple) else ()
+
+
+def error_code(error) -> Optional[int]:
+    """Der eigentliche Fehlercode. Über IDispatch kommt jeder IMAPI2-Fehler als DISP_E_EXCEPTION (0x80020009); den
+    Code von IMAPI2 legt comtypes aus EXCEPINFO.scode in details[4]."""
+    details = _details(error)
+    if len(details) >= 5 and isinstance(details[4], int) and details[4]:
+        return hresult(details[4])
     code = getattr(error, "hresult", None)
-    return f"{text} (0x{hresult(code):08X})" if code is not None else text
+    return hresult(code) if code is not None else None
+
+
+def com_error_text(error) -> str:
+    """Text eines COMError (IMAPI2 legt die eigentliche Meldung in details[0]) mit dem eigentlichen Fehlercode."""
+    details = _details(error)
+    text = str(details[0]).strip() if details and details[0] else (getattr(error, "text", "") or str(error))
+    code = error_code(error)
+    return f"{text} (0x{code:08X})" if code is not None else text
+
+
+def duration_text(seconds: float) -> str:
+    """125 → „2:05“, 3725 → „1:02:05“."""
+    seconds = max(0, int(round(seconds)))
+    hours, rest = divmod(seconds, 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
+
+
+def factor_text(sectors_per_second: float) -> str:
+    return f"{sectors_per_second / BD_1X_SECTORS:.1f}x"
+
+
+class WriteClock:
+    """Zeit und Schreibrate fürs Protokoll. IMAPI2s RemainingTime taugt nicht (im echten Lauf ab 30 % nur 0 s);
+    die Rate wird je Abschnitt zwischen zwei Protokollzeilen gemessen, so sieht man auch, wenn das Laufwerk bremst."""
+
+    def __init__(self, started: float):
+        self.started = started
+        self.mark: Optional[Tuple[float, int]] = None      # (Zeit, LBA) der letzten Zeile
+
+    def text(self, now: float, end_lba: int, last_lba: int) -> str:
+        parts = [duration_text(now - self.started)]
+        if self.mark is not None and now > self.mark[0] and last_lba > self.mark[1]:
+            rate = (last_lba - self.mark[1]) / (now - self.mark[0])
+            parts.append(f"{factor_text(rate)} ({rate:.0f} Sektoren/s)")
+            parts.append(f"noch ca. {duration_text(max(0, end_lba - last_lba) / rate)}")
+        self.mark = (now, last_lba)
+        return " · ".join(parts)
+
+
+def failure_text(elapsed: float, start_lba: Optional[int], count: int, last_lba: Optional[int], state: str) -> str:
+    """Eine Zeile nach einem Schreibfehler: wann, wie weit IMAPI2 gekommen ist, wie die Disc jetzt dasteht."""
+    parts = [f"IMAPI2: Fehler nach {duration_text(elapsed)}"]
+    if last_lba is not None and count > 0:
+        start = start_lba or 0
+        parts.append(f"zuletzt gemeldet LBA {last_lba} von {start + count} "
+                     f"({(last_lba - start) / count * 100:.1f} %)")
+    else:
+        parts.append("Schreiben hatte noch nicht begonnen")
+    parts.append(f"Disc danach: {state}")
+    return " · ".join(parts)
 
 
 class WriteTracker:
@@ -353,6 +421,16 @@ def _read_media(recorder) -> Tuple[Media, Dict[str, int]]:
     return media, speeds
 
 
+def _media_state(recorder) -> str:
+    """Zustand der Disc nach einem Fehler (z. B. „non-empty session“: offen geblieben, nicht abgeschlossen)."""
+    try:
+        data = _create("IMAPI2.MsftDiscFormat2Data")
+        data.Recorder = recorder
+        return status_text(int(data.CurrentMediaStatus))
+    except Exception as e:
+        return f"unbekannt ({com_error_text(e)})"
+
+
 class WindowsBackend:
     name = "windows-imapi2"
     verifies_itself = True       # burn() prüft selbst (Rücklesen über \\.\X:)
@@ -441,7 +519,8 @@ class WindowsBackend:
             raise BurnError(com_error_text(e), PHASE_PREPARE)
         if not media.present:
             raise BurnError("Kein Medium im Laufwerk", PHASE_PREPARE)
-        report.log(f"IMAPI2: {drive.name} · {media.kind} · {media.status} · {media.free_blocks} Sektoren frei")
+        report.log(f"IMAPI2: {drive.name} · {media.kind} · {media.status} · {media.free_blocks} Sektoren frei · "
+                   f"Stufen {', '.join(speeds) or '–'}")
         if report.cancelled():
             raise BurnCancelled(PHASE_PREPARE)
         try:
@@ -468,10 +547,16 @@ class WindowsBackend:
             if options.speed and options.speed in speeds:
                 writer.SetWriteSpeed(speeds[options.speed], False)
                 report.log(f"IMAPI2: SetWriteSpeed({speeds[options.speed]}) = {options.speed}")
+            elif options.speed:
+                report.log(f"IMAPI2: {options.speed} wird für dieses Medium nicht angeboten – das Laufwerk wählt")
+            else:
+                report.log("IMAPI2: keine Geschwindigkeit gesetzt – das Laufwerk wählt (meist die höchste)")
             stream = _open_stream(iso_path)
             tracker = WriteTracker()
             cancel_sent = threading.Event()
-            logged = {"action": None, "tenth": -1}
+            logged = {"action": None, "tenth": -1, "speed": False}
+            last = {"start": None, "count": 0, "lba": None}
+            clock = WriteClock(time.monotonic())
 
             cancel_lock = threading.Lock()
 
@@ -490,19 +575,30 @@ class WindowsBackend:
             def on_update(args):
                 cancel_if_wanted()
                 action = int(args.CurrentAction)
-                last = int(args.LastWrittenLba) if action == ACTION_WRITING else 0
-                if tracker.feed(action, int(args.StartLba), int(args.SectorCount), last):
+                lba = int(args.LastWrittenLba) if action == ACTION_WRITING else 0
+                start, count = int(args.StartLba), int(args.SectorCount)
+                if action == ACTION_WRITING:
+                    last.update(start=start, count=count, lba=lba)
+                if tracker.feed(action, start, count, lba):
                     report.phase(tracker.phase)
                 if action != logged["action"]:
                     logged["action"] = action
-                    report.log(f"IMAPI2: CurrentAction {action}")
+                    report.log(f"IMAPI2: CurrentAction {action} ({ACTION_NAMES.get(action, '?')}) · "
+                               f"{duration_text(time.monotonic() - clock.started)}")
+                if action == ACTION_WRITING and not logged["speed"]:
+                    logged["speed"] = True
+                    try:
+                        current = int(writer.CurrentWriteSpeed)
+                        report.log(f"IMAPI2: Schreibgeschwindigkeit {current} Sektoren/s ≈ {speed_label(current)}")
+                    except Exception as e:
+                        report.log(f"IMAPI2: Schreibgeschwindigkeit unbekannt ({com_error_text(e)})")
                 report.progress(tracker.progress)
                 if action == ACTION_WRITING and tracker.progress is not None:
                     tenth = int(tracker.progress * 10)
                     if tenth != logged["tenth"]:                # ins Protokoll etwa alle 10 %
                         logged["tenth"] = tenth
-                        report.log(f"IMAPI2: {tracker.progress * 100:.0f} % · LBA {last} · "
-                                   f"{int(args.RemainingTime)} s")
+                        report.log(f"IMAPI2: {tracker.progress * 100:.0f} % · LBA {lba} · "
+                                   + clock.text(time.monotonic(), start + count, lba))
 
             report.phase(PHASE_WRITE)
             report.progress(None)
@@ -522,8 +618,10 @@ class WindowsBackend:
                 try:
                     writer.Write(stream)
                 except Exception as e:
-                    if cancel_sent.is_set() or hresult(getattr(e, "hresult", 0) or 0) == E_IMAPI_REQUEST_CANCELLED:
+                    if cancel_sent.is_set() or error_code(e) == E_IMAPI_REQUEST_CANCELLED:
                         raise BurnCancelled(tracker.phase if tracker.phase != PHASE_PREPARE else PHASE_WRITE)
+                    report.log(failure_text(time.monotonic() - started, last["start"], last["count"], last["lba"],
+                                            _media_state(recorder)))
                     raise BurnError(com_error_text(e), PHASE_WRITE)
                 finally:
                     done.set()

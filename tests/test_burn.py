@@ -20,7 +20,8 @@ from modules.burn.macos import (
     PuppetTracker, burn_command, parse_burn_devices, parse_can_write_bd, parse_drive_list, parse_media_status,
 )
 from modules.burn.model import (
-    BurnOptions, Drive, Media, PHASE_ERASE, PHASE_PREPARE, PHASE_VERIFY, PHASE_WRITE,
+    BurnOptions, Drive, Media, PHASE_ERASE, PHASE_PREPARE, PHASE_VERIFY, PHASE_WRITE, SPEED_AUTO, auto_speed,
+    resolve_speed, speed_factor,
 )
 
 app_instance = QApplication.instance() or QApplication(sys.argv)
@@ -302,6 +303,35 @@ class TestChecks(unittest.TestCase):
         self.assertEqual(self.keys(self.iso, Drive(key="1", name="?"), blank_bd_r()), [])
 
 
+class TestAutoSpeed(unittest.TestCase):
+    """v1.33.0: „Automatisch“ brennt höchstens 4x (ein BD-R-Brand mit 6x brach bei 98,6 % ab)."""
+
+    def test_speed_factor(self):
+        self.assertEqual(speed_factor("4x"), 4.0)
+        self.assertEqual(speed_factor("4"), 4.0)          # macOS (drutil xFactor)
+        self.assertEqual(speed_factor("2.5×"), 2.5)
+        self.assertIsNone(speed_factor("max"))
+
+    def test_highest_up_to_4x(self):
+        self.assertEqual(auto_speed(["2x", "4x", "6x"]), "4x")
+        self.assertEqual(auto_speed(["6x", "2x"]), "2x")
+        self.assertEqual(auto_speed(["2", "4", "6", "8"]), "4")
+        self.assertEqual(auto_speed(["2x"]), "2x")
+
+    def test_only_faster_speeds_takes_the_slowest(self):
+        self.assertEqual(auto_speed(["8x", "6x"]), "6x")
+
+    def test_unknown_speeds_leave_it_to_the_drive(self):
+        self.assertEqual(auto_speed([]), SPEED_AUTO)
+        self.assertEqual(auto_speed(["max"]), SPEED_AUTO)
+
+    def test_explicit_choice_wins(self):
+        self.assertEqual(resolve_speed("6x", blank_bd_r()), "6x")
+        self.assertEqual(resolve_speed(SPEED_AUTO, blank_bd_r()), "4x")
+        self.assertEqual(resolve_speed(SPEED_AUTO, None), SPEED_AUTO)
+        self.assertEqual(resolve_speed(SPEED_AUTO, Media(present=False, speeds=["2x"])), SPEED_AUTO)
+
+
 class TestBurnRun(unittest.TestCase):
     drive = Drive(key="1", name="FAKE", can_write_bd=True)
 
@@ -475,6 +505,58 @@ class TestBurnPage(TempDirCase):
         self.wait(page)
         self.assertEqual(page.backend.ejects, 0)
         self.assertTrue(page.log_view.isVisibleTo(page))
+        self.assertIn(page.t("burn_hint_write_failed"), page.log_view.toPlainText())    # BD-R: Tipp Geschwindigkeit
+
+    def test_write_failure_on_bd_re_says_it_can_be_erased(self):
+        page = self.make_page(media=used_bd_re())
+        page.backend.fail_phase = PHASE_WRITE
+        page.set_iso(make_iso(self.tmp))
+        page.start_burn()
+        self.wait(page)
+        log = page.log_view.toPlainText()
+        self.assertIn(page.t("burn_hint_write_failed_rewritable"), log)
+        self.assertNotIn(page.t("burn_hint_write_failed"), log)
+
+    def test_prepare_failure_has_no_write_hint(self):
+        page = self.make_page()
+        page.backend.fail_phase = PHASE_PREPARE
+        page.set_iso(make_iso(self.tmp))
+        page.start_burn()
+        self.wait(page)
+        self.assertNotIn(page.t("burn_hint_write_failed"), page.log_view.toPlainText())
+
+    def test_auto_speed_burns_4x_and_says_so(self):
+        page = self.make_page()                          # BD-R mit 2x, 4x, 6x
+        page.set_iso(make_iso(self.tmp))
+        page.refresh_devices(sync=True)
+        self.assertEqual(page.combo_speed.itemData(0), SPEED_AUTO)
+        self.assertIn("4×", page.combo_speed.itemText(0))
+        page.start_burn()
+        self.wait(page)
+        self.assertEqual(page.backend.burns[0][2].speed, "4x")
+        self.assertEqual(page.speed, SPEED_AUTO)           # gemerkt wird weiter „Automatisch“
+        self.assertIn(page.t("burn_log_speed_auto", speed="4×"), page.log_view.toPlainText())
+
+    def test_chosen_speed_is_kept(self):
+        page = self.make_page()
+        page.speed = "6x"
+        page.set_iso(make_iso(self.tmp))
+        page.start_burn()
+        self.wait(page)
+        self.assertEqual(page.backend.burns[0][2].speed, "6x")
+        self.assertIn(page.t("burn_log_speed", speed="6×"), page.log_view.toPlainText())
+
+    def test_no_reported_speeds_leaves_it_to_the_drive(self):
+        media = blank_bd_r()
+        media.speeds = []
+        page = self.make_page(media=media)
+        page.set_iso(make_iso(self.tmp))
+        page.refresh_devices(sync=True)
+        self.assertEqual(page.combo_speed.itemText(0), page.t("burn_speed_auto"))
+        page.start_burn()
+        self.wait(page)
+        self.assertEqual(page.backend.burns[0][2].speed, SPEED_AUTO)
+        self.assertIn(page.t("burn_log_speed_drive"), page.log_view.toPlainText())
 
     def test_recent_list(self):
         page = self.make_page()

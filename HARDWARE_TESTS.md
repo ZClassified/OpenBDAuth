@@ -28,12 +28,20 @@ Der Panasonic hat sich in früheren Versionen als besonders strenger Player erwi
 | Sony PlayStation 3 | Spielkonsole als Player | Modell und Firmware nicht erfasst |
 | LG OLED55C27LA | Fernseher | 2D |
 | LG OLED55E6V | Fernseher | 3D |
-| HL-DT-ST BP40NS20 | Brenner (USB, extern) | BD-R/BD-RE; Brenntests aus OpenBDAuth unter macOS (ab v1.30.0) |
+| HL-DT-ST BP40NS20 | Brenner (USB, extern) | BD-R/BD-RE; Brenntests aus OpenBDAuth unter macOS (ab v1.30.0) und Windows (ab v1.32.0) |
 | VLC (macOS) | Software-Player | libbluray; HDMV-Menüs, 3D nur als 2D – kein Ersatz für einen Player |
 
 ---
 
 ## Testläufe (neueste zuerst)
+
+### 2026-11-21 · v1.32.0 · `Untitled_Project.iso` · Fehlbrand auf BD-R unter Windows (6x)
+
+- **Inhalt:** ISO mit 18 011 521 024 Bytes (8 794 688 Sektoren).
+- **Laufwerk:** HL-DT-ST BP40NS20 (Firmware ML01) über USB, Windows 11, Medium: **BD-R 25 GB** (leer, 11 826 176 freie Sektoren, Stufen 2x/4x/6x). Geschwindigkeit „Automatisch“ – IMAPI2 brannte mit der Höchststufe (≈ 13 050 Sektoren/s = 6x).
+- **Brennen:** Fortschritt bis 90 % gemeldet, dann `CurrentAction 5` (Abschließen) und Abbruch: „Fehler beim Schreiben. Das Laufwerk hat Fehlerinformationen zurückgegeben. Der Fehler ist nicht behebbar. (0x80020009)“. Dauer rund 40 Minuten; IMAPI2s Restzeit stand ab 30 % auf „0 s“.
+- **Disc danach:** lesbar bis LBA 8 674 911 (98,6 %), die letzten 119 776 Sektoren (≈ 234 MB) unbeschrieben. IMAPI2-Status nur „non-empty session“ (weder abgeschlossen noch erweiterbar). Windows hängt das UDF trotzdem ein; beim Lesen des Endes meldet das Laufwerk BLANK CHECK (Ereignis cdrom 51, Sense Key 8). Die BD-R ist unbrauchbar.
+- **Folgerung (v1.33.0):** „Automatisch“ höchstens 4x, echter Fehlercode, Hinweis nach Schreibfehlern, Zeit/Rate und Disc-Zustand im Protokoll. Gegenprobe mit 4x auf einer neuen BD-R steht aus.
 
 ### 2026-11-11 · v1.32.0-dev · Projekt „D4A“ · `D4A.iso` · erster Brand unter Windows (IMAPI2)
 

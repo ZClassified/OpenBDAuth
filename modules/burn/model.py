@@ -14,7 +14,36 @@ SECTOR = 2048
 # Phasen eines Brennvorgangs (Anzeige, Abbrechen, Fehlermeldung)
 PHASE_PREPARE, PHASE_ERASE, PHASE_WRITE, PHASE_VERIFY, PHASE_EJECT = "prepare", "erase", "write", "verify", "eject"
 
-SPEED_AUTO = ""          # das Laufwerk wählt (hdiutil: max)
+SPEED_AUTO = ""          # „Automatisch“: höchstens AUTO_MAX_FACTOR (auto_speed), sonst wählt das Laufwerk
+# „Automatisch“ brennt nicht mit der Höchststufe: Ein BD-R-Brand mit 6x (BP40NS20 unter Windows, 2026-11-21) brach
+# bei 98,6 % am äußeren Rand mit einem Schreibfehler des Laufwerks ab. 4x ist kaum langsamer und schont den Rohling.
+AUTO_MAX_FACTOR = 4.0
+
+
+def speed_factor(label: str) -> Optional[float]:
+    """„4x“, „4“ (macOS), „4×“ → 4.0; unlesbar → None."""
+    try:
+        return float(str(label).strip().lower().rstrip("x×").strip())
+    except ValueError:
+        return None
+
+
+def auto_speed(speeds: List[str]) -> str:
+    """Was „Automatisch“ brennt: die höchste angebotene Stufe bis AUTO_MAX_FACTOR, sonst die langsamste. Ohne Liste
+    SPEED_AUTO (dann wählt das Laufwerk)."""
+    known = [(f, s) for s in speeds or () for f in (speed_factor(s),) if f is not None and f > 0]
+    if not known:
+        return SPEED_AUTO
+    allowed = [item for item in known if item[0] <= AUTO_MAX_FACTOR]
+    return max(allowed)[1] if allowed else min(known)[1]
+
+
+def resolve_speed(choice: str, media: Optional["Media"]) -> str:
+    """Die Stufe, mit der gebrannt wird: eine ausdrückliche Wahl bleibt, „Automatisch“ wird über auto_speed
+    aufgelöst."""
+    if choice:
+        return choice
+    return auto_speed(media.speeds if media is not None and media.present else [])
 
 
 class BurnError(Exception):
@@ -87,7 +116,7 @@ class Media:
 
 @dataclass
 class BurnOptions:
-    speed: str = SPEED_AUTO          # "" oder z. B. "4x"
+    speed: str = SPEED_AUTO          # "" (Laufwerk wählt) oder z. B. "4x"; die Seite löst „Automatisch“ vorher auf
     verify: bool = False             # Disc nach dem Brennen prüfen (Vorgabe aus, Plan)
     erase: bool = False              # BD-RE vorher löschen (bestätigt)
 

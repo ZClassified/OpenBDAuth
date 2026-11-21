@@ -7,7 +7,7 @@ import re
 from typing import Dict, List, Tuple
 
 APP_NAME = "OpenBDAuth"
-APP_VERSION = "1.32.2"
+APP_VERSION = "1.33.0"
 
 # ----------------------------------------------------------------------
 # 1. PINNED LANGUAGES (Häufigste Sprachen an oberster Stelle)

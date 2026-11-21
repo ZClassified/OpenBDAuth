@@ -120,7 +120,7 @@ in `gui/studio/main_window.py`). Wie bei Vorbereiten sind die Disc-Docks und Dis
 
 - **Laufwerk** (Auswahl, falls mehrere vorhanden) mit Status: kein Medium / BD-R leer, 25 GB / BD-RE mit Daten /
   …; „Aktualisieren“ und automatische Abfrage alle paar Sekunden, solange der Bereich offen ist.
-- **Geschwindigkeit:** „Automatisch“ (Vorgabe) oder die Stufen, die das Laufwerk für das eingelegte Medium meldet.
+- **Geschwindigkeit:** „Automatisch“ (Vorgabe) oder die Stufen, die das Laufwerk für das eingelegte Medium meldet. „Automatisch“ heißt seit v1.33.0: die höchste gemeldete Stufe bis 4x (sonst die langsamste); ohne gemeldete Stufen wählt das Laufwerk.
 - **Häkchen „Disc nach dem Brennen prüfen“** (englisch: „Verify disc after burning“), vorgegeben **aus**. Prüfen
   kostet zusätzlich Zeit, weil die ganze Disc einmal gelesen wird. Gespeichert in den App-Einstellungen
   (`burn/verify_after_burn`); fehlt der Wert, gilt **aus**.

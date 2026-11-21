@@ -81,6 +81,50 @@ class TestValues(unittest.TestCase):
         self.assertIn("CD-Rekorder", text)
         self.assertIn("0x80020009", text)
 
+    def test_com_error_text_uses_scode_from_excepinfo(self):
+        """comtypes legt EXCEPINFO in details: (Text, Quelle, Hilfedatei, Hilfekontext, scode). Der scode ist der
+        eigentliche IMAPI2-Fehler, 0x80020009 nur die IDispatch-Hülle."""
+        class FakeComError(Exception):
+            hresult = -2147352567
+            text = "Ausnahmefehler aufgetreten."
+            details = ("Fehler beim Schreiben. Das Laufwerk hat Fehlerinformationen zurückgegeben.", "IMAPI2", None, 0,
+                       0xC0AA0301 - (1 << 32))
+        error = FakeComError()
+        self.assertEqual(windows.error_code(error), 0xC0AA0301)
+        text = windows.com_error_text(error)
+        self.assertIn("Fehler beim Schreiben", text)
+        self.assertIn("0xC0AA0301", text)
+        self.assertNotIn("0x80020009", text)
+
+    def test_com_error_text_with_odd_details(self):
+        class FakeComError(Exception):
+            hresult = -2147352567
+            text = "Typ passt nicht"
+            details = 3                                    # DISP_E_PARAMNOTFOUND: comtypes gibt argerr als int
+        self.assertEqual(windows.com_error_text(FakeComError()), "Typ passt nicht (0x80020009)")
+
+    def test_duration_and_factor(self):
+        self.assertEqual(windows.duration_text(0), "0:00")
+        self.assertEqual(windows.duration_text(125), "2:05")
+        self.assertEqual(windows.duration_text(3725), "1:02:05")
+        self.assertEqual(windows.factor_text(13170), "6.0x")
+
+    def test_write_clock_measures_each_section(self):
+        clock = windows.WriteClock(started=100.0)
+        self.assertEqual(clock.text(160.0, 1_000_000, 0), "1:00")             # erste Zeile: nur Zeit
+        text = clock.text(260.0, 1_000_000, 439_000)                           # 100 s, 4390 Sektoren/s
+        self.assertIn("2:40", text)
+        self.assertIn("2.0x (4390 Sektoren/s)", text)
+        self.assertIn("noch ca. 2:08", text)                                   # 561 000 / 4390 s
+        self.assertEqual(clock.text(260.0, 1_000_000, 439_000), "2:40")       # keine Zeit vergangen: keine Rate
+
+    def test_failure_text(self):
+        text = windows.failure_text(2520, 0, 8_794_688, 8_674_911, "non-empty session")
+        self.assertIn("nach 42:00", text)
+        self.assertIn("LBA 8674911 von 8794688 (98.6 %)", text)
+        self.assertIn("Disc danach: non-empty session", text)
+        self.assertIn("noch nicht begonnen", windows.failure_text(3, None, 0, None, "blank"))
+
     def test_tracker(self):
         tracker = windows.WriteTracker()
         tracker.phase = PHASE_WRITE
@@ -157,6 +201,7 @@ class FakeData:
         self.FreeSectorsOnMedia = self.TotalSectorsOnMedia = 11826176
         self.NextWritableAddress = 0
         self.SupportedWriteSpeedDescriptors = tuple(Descriptor(s) for s in world.speeds)
+        self.CurrentWriteSpeed = world.current_speed
 
     def IsRecorderSupported(self, recorder):
         return True
@@ -204,6 +249,7 @@ class World:
                        Args(windows.ACTION_COMPLETED)]
         self.write_error = None
         self.block_until_cancel = False
+        self.current_speed = 8780
 
     def create(self, progid):
         return {"IMAPI2.MsftDiscRecorder2": FakeRecorder, "IMAPI2.MsftDiscFormat2Data": FakeData,
@@ -293,6 +339,55 @@ class TestBurnFlow(unittest.TestCase):
         self.assertEqual(ctx.exception.phase, PHASE_WRITE)
         self.assertIn("schreibgeschützt", str(ctx.exception))
         self.assertEqual(self.world.calls[-1], ("release",))
+
+    def test_write_error_logs_how_far_and_disc_state(self):
+        """Wie beim Fehlbrand 2026-11-21: Fehler erst beim Abschließen – das Protokoll sagt, wie weit IMAPI2 kam und
+        wie die Disc danach dasteht."""
+        self.world = World(media_type=18, state=windows.STATE_BLANK | windows.STATE_APPENDABLE, blank=True,
+                           speeds=(4390, 8780, 13170))
+        self.world.events = self.world.events[:3] + [Args(windows.ACTION_FINALIZATION)]
+        self.world.write_error = "Fehler beim Schreiben. Der Fehler ist nicht behebbar."
+        report = Report()
+        with mock.patch.object(windows, "_create", self.world.create):
+            self.world.state = windows.STATE_NON_EMPTY_SESSION      # so liest _media_state die Disc danach
+            with self.assertRaises(BurnError):
+                self.backend.burn(self.drive, "a.iso", BurnOptions(), report)
+        failure = [line for line in report.lines if line.startswith("IMAPI2: Fehler nach")]
+        self.assertEqual(len(failure), 1)
+        self.assertIn("LBA 100 von 100 (100.0 %)", failure[0])
+        self.assertIn("Disc danach: non-empty session", failure[0])
+        self.assertIn("IMAPI2: CurrentAction 5 (Abschließen)", " ".join(report.lines))
+
+    def test_cancel_recognised_by_scode(self):
+        """Über IDispatch kommt auch der Abbruch als 0x80020009; erkannt wird er am scode."""
+        self.world.write_error = "Abgebrochen"
+        cancelled = windows.E_IMAPI_REQUEST_CANCELLED - (1 << 32)
+
+        def raise_wrapped(stream):
+            error = FakeComError("Abgebrochen")
+            error.details = ("Abgebrochen", "IMAPI2", None, 0, cancelled)
+            raise error
+        with mock.patch.object(FakeData, "Write", lambda self, stream: raise_wrapped(stream)):
+            with self.assertRaises(BurnCancelled):
+                self.backend.burn(self.drive, "a.iso", BurnOptions(), Report())
+
+    def test_log_names_speed_and_time(self):
+        report = Report()
+        self.backend.burn(self.drive, "a.iso", BurnOptions(), report)
+        log = "\n".join(report.lines)
+        self.assertIn("keine Geschwindigkeit gesetzt", log)
+        self.assertIn("Schreibgeschwindigkeit 8780 Sektoren/s ≈ 4x", log)
+        self.assertIn("Stufen 2x, 4x", log)
+        progress = [line for line in report.lines if line.startswith("IMAPI2: 50 %")]
+        self.assertEqual(len(progress), 1)
+        self.assertRegex(progress[0], r"LBA 50 · \d+:\d\d")
+        self.assertFalse(progress[0].endswith(" 0 s"))                    # nicht mehr IMAPI2s RemainingTime
+
+    def test_unknown_speed_choice_is_logged(self):
+        report = Report()
+        self.backend.burn(self.drive, "a.iso", BurnOptions(speed="8x"), report)
+        self.assertNotIn("speed", [c[0] for c in self.world.calls])
+        self.assertIn("8x wird für dieses Medium nicht angeboten", "\n".join(report.lines))
 
     def test_cancel_during_write_calls_cancel_write(self):
         report = Report(cancel_at_progress=0.5)

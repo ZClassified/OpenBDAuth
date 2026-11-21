@@ -5,6 +5,21 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.33.0] - 2026-11-21
+
+### Brennen: sicherere Geschwindigkeit, verständliche Fehler
+
+Anlass: Ein BD-R-Brand unter Windows (18 GB, HL-DT-ST BP40NS20) brach mit 6x bei 98,6 % ab – das Laufwerk meldete am äußeren Rand einen Schreibfehler, die Disc blieb offen und unbrauchbar (`HARDWARE_TESTS.md`).
+
+- **„Automatisch“ brennt höchstens 4x** (alle Systeme): die höchste angebotene Stufe bis 4x, sonst die langsamste. Bisher wählte das Laufwerk (IMAPI2 und `hdiutil`: die Höchststufe). Das Auswahlfeld zeigt, was „Automatisch“ bedeutet („Automatisch (4×)“); eine ausdrücklich gewählte Stufe bleibt, auch 6x. Meldet das Laufwerk keine Stufen, wählt es weiterhin selbst.
+- **Geschwindigkeit im Protokoll:** zu Beginn die gewählte Stufe; unter Windows zusätzlich die angebotenen Stufen und die tatsächliche Schreibgeschwindigkeit des Laufwerks (`CurrentWriteSpeed`).
+- **Fehlermeldung mit dem echten Fehlercode (Windows):** Statt der IDispatch-Hülle `0x80020009` steht jetzt der Code von IMAPI2 (aus `EXCEPINFO.scode`) hinter dem Text. Ein Abbruch wird auch daran erkannt.
+- **Hinweis nach einem Schreibfehler:** Bei BD-R „meist nicht mehr verwendbar – niedrigere Geschwindigkeit oder anderen Rohling nehmen“, bei BD-RE „löschen und neu beschreiben“.
+- **Protokoll nach einem Fehler (Windows):** wie lange gebrannt wurde, die zuletzt gemeldete LBA mit Anteil (bisher nur alle 10 %) und der Zustand der Disc danach (z. B. „non-empty session“ = offen geblieben).
+- **Zeit und Rate im Protokoll (Windows):** Jede 10-%-Zeile nennt die vergangene Zeit, die gemessene Schreibrate seit der letzten Zeile (z. B. „4.1x“) und eine eigene Restzeit. IMAPI2s Restzeit stand ab 30 % nur noch auf „0 s“. Die Phasen von IMAPI2 stehen mit Namen im Protokoll („CurrentAction 5 (Abschließen)“).
+- **Unverändert:** „Disc nach dem Brennen prüfen“ bleibt standardmäßig aus.
+- **Tests:** Auswahl der Stufe, Anzeige und Protokoll auf der Brenn-Seite, Hinweise nach Fehlern; unter Windows Fehlercode aus `scode`, Abbruch über `scode`, Zeit/Rate, Fehlerzeile mit Disc-Zustand.
+
 ## [1.32.2] - 2026-11-12
 
 ### Geändert
