@@ -35,6 +35,17 @@ Der Panasonic hat sich in früheren Versionen als besonders strenger Player erwi
 
 ## Testläufe (neueste zuerst)
 
+### 2026-11-22 · v1.34.0-dev · Testdatei 2 GiB · neuer Schreibweg (MMC über `IDiscRecorder2Ex`) auf BD-RE
+
+- **Zweck:** den neuen Weg für leere BD-R (`modules/burn/mmc.py`) am echten Laufwerk prüfen, ohne einen BD-R zu verbrauchen. Geschrieben mit `BdrWriter` aus einem Testskript; bei BD-RE nur `SYNCHRONIZE CACHE`, kein Abschließen (das prüft erst der BD-R-Test).
+- **Laufwerk:** HL-DT-ST BP40NS20 (ML01) über USB, Windows 11, BD-RE (Profil 0x43, formatiert, Stufe 2x). `IDiscRecorder2Ex` aus der eigenen Vtable-Nachbildung (ohne `comtypes.gen`), exklusiver Zugriff über IMAPI2, größte Übertragung 64 KiB, Ausrichtung 0.
+- **Inhalt:** 1 048 576 Sektoren (2 GiB), jeder Sektor mit seiner LBA gestempelt.
+- **Schreiben:** `SET STREAMING` 8 990 kB/s angenommen; 4:12 min, durchgehend **2,0x** (4 413 Sektoren/s, nur die ersten 10 % 1,3x beim Anlaufen); kein „Long write in progress“, keine behobenen Fehler.
+- **Rücklesen** roh über dieselbe Leitung (`READ(10)`, 32 Sektoren je Befehl): **identisch**.
+- **Vorher festgestellt:** IMAPI2 meldet SCSI-Fehler nicht als Ausnahme, nur im Sense-Puffer (TEST UNIT READY ohne Disc: „ok“, Sense 2/3A/01).
+- **Abschließen** an der IMAPI2-Fehlbrand-Disc vom 22.11. geprüft (ohnehin unbrauchbar, Sitzung offen): `BdrWriter._finish` mit exklusivem Zugriff. Vorher Profil 0x41, Disc-Status 1 (unvollständig), nächste Adresse 8 511 488. `SYNCHRONIZE CACHE` < 1 s, `CLOSE TRACK` 1 in 14 s, Abschließen (Funktion 6) in 10 s angenommen – zusammen 24 s (ImgBurn: 21 s). Danach **Profil 0x40, Disc-Status 2 (abgeschlossen)**, 0 Sektoren frei.
+- **Offen:** Brand einer leeren BD-R über die Oberfläche (freier Platz 12 219 392 in der Anzeige, Reservebereich danach 0, Player-Test) – beim nächsten echten Brand.
+
 ### 2026-11-22 · v1.33.0 · `Untitled_Project.iso` · zweiter Fehlbrand auf BD-R unter Windows (4x)
 
 - **Inhalt:** dieselbe ISO wie am 2026-11-21 (8 794 688 Sektoren), gelesen von einer USB-Festplatte (ICY BOX, exFAT).

@@ -51,14 +51,68 @@ ISO lässt sich dort beliebig oft brennen, ohne das Projekt neu zu packen.
   während des Prüfens (z. B. in VLC) – ggf. `DisableMcn` bis nach dem Prüfen. Kurz ansehen: die Zahlenfelder aus
   v1.30.1 unter Windows.
 
+### Plan Windows: BD-R ohne Defektverwaltung (2026-11-22, v1.34.0)
+
+**Anlass** (`HARDWARE_TESTS.md`, 21. und 22.11.): Zwei BD-R-Brände über `IDiscFormat2Data.Write` brachen kurz vor
+dem Ende ab und liefen nur mit 1,0–1,7x statt 4x bzw. 6x. ImgBurn brannte dieselbe ISO auf dieselbe Rohling-Sorte
+(`CMCMAG-BA5-000`) fehlerfrei mit 3,1x; die Disc ist Byte für Byte die ISO. Die Fehlbrand-Disc belegt den Grund:
+**IMAPI2 formatiert eine leere BD-R mit Defektverwaltung** (Reservebereich 196 608 Blöcke, Spur 11 826 176 statt
+12 219 392 Sektoren). Das Laufwerk prüft dann jeden Block nach (halbe Geschwindigkeit) und hatte 14 688 Blöcke
+ausgelagert, bevor es mit einem nicht behebbaren Fehler aufgab. Abschalten lässt sich das bei `Write` nicht.
+
+**Lösung:** Eine **leere BD-R** schreibt OpenBDAuth unter Windows selbst, mit MMC-Befehlen über
+`IDiscRecorder2Ex` (`SendCommandNoData`, `SendCommandSendDataToDevice`, `SendCommandGetDataFromDevice`). IMAPI2 bleibt
+die Leitung zum Laufwerk: keine Admin-Rechte, exklusiver Zugriff und Laufwerksliste wie bisher. Ohne `FORMAT UNIT`
+bleibt die BD-R unformatiert, also ohne Reservebereich und ohne Nachprüfen – so wie bei ImgBurn
+(„Hardware Defect Management Active: No“). Ob die Daten stimmen, zeigt danach unser eigener Vergleich (Häkchen
+„Prüfen“).
+
+**Ablauf** (`modules/burn/mmc.py`, rein und auf allen Systemen testbar; `windows.py` liefert nur das Gerät):
+
+1. **Vorprüfung:** aktuelles Profil 0x41 (BD-R SRM), `READ DISC INFORMATION` „leer“, `READ TRACK INFORMATION`
+   Spur 1: nächste beschreibbare Adresse 0, freie Blöcke ≥ ISO. Passt etwas nicht, nimmt das Backend den bisherigen
+   Weg über IMAPI2 (mit Zeile im Protokoll).
+2. **Geschwindigkeit:** `SET STREAMING` (B6h) mit der gewählten Stufe in KB/s (Sektoren/s × 2048 / 1000, 4x =
+   17 981 KB/s wie bei ImgBurn). Schlägt das fehl, wählt das Laufwerk; nur eine Protokollzeile.
+3. **Schreiben:** `WRITE(10)` (2Ah) ab LBA 0 in Blöcken von 64 KiB (eine BD-Clustergröße, 32 Sektoren) oder einem
+   Vielfachen bis zur größten Übertragung des Geräts. Der letzte Block wird mit Nullen auf volle 32 Sektoren
+   aufgefüllt. Ein Lese-Thread hält bis zu 64 MiB der ISO vorrätig (Quelle und Brenner teilen sich oft den USB).
+   Meldet das Laufwerk „Long write in progress“ oder „Operation in progress“ (Sense 2/04/08, 2/04/07), wird derselbe
+   Befehl nach kurzer Pause wiederholt.
+4. **Abschließen:** `SYNCHRONIZE CACHE` (35h), `CLOSE TRACK` Spur 1 (5Bh, Funktion 1), `CLOSE SESSION` mit
+   Finalisieren (5Bh, Funktion 6) – dieselben Schritte wie im ImgBurn-Log („Synchronising Cache / Closing Track /
+   Finalising Disc“).
+5. **Abbrechen:** zwischen zwei Schreibbefehlen; danach `SYNCHRONIZE CACHE`, die BD-R bleibt offen (unbrauchbar, wie
+   bisher angekündigt).
+6. **Fehler:** mit Sense-Code und Klartext der Norm (z. B. „Sense 3/0C/00 WRITE ERROR bei LBA …“) statt des
+   IMAPI2-Texts; im Protokoll zusätzlich die nächste beschreibbare Adresse nach dem Fehler.
+7. **Protokoll:** Fortschritt alle 10 % mit Zeit, Rate und Restzeit (`WriteClock`), dazu Profil, freie Sektoren,
+   gesetzte Geschwindigkeit, Größe der Schreibblöcke.
+
+**Außerdem:** Für eine leere BD-R meldet IMAPI2 nur den Platz nach dem Formatieren (11 826 176 Sektoren). Das Backend
+liest die freien Blöcke deshalb mit `READ TRACK INFORMATION` (12 219 392); ISOs bis zur vollen Größe passen.
+
+**Unverändert über IMAPI2:** BD-RE (löschen und schreiben; dort lief alles), BD-R, die nicht leer ist, und alles, was
+die Vorprüfung nicht besteht.
+
+**Tests:** ein nachgebildetes Laufwerk (`mmc`-Gerät) mit Profil, Disc- und Spurinfo, das Schreibbefehle mitschreibt:
+Reihenfolge und Inhalt der Befehle, Auffüllen auf 32 Sektoren, Wiederholen bei 2/04/08, Abbruch, Schreibfehler mit
+Sense-Text, Rückfall auf IMAPI2 bei nicht leerer Disc, freie Blöcke aus der Spurinfo, Befehlsaufbau (CDBs) und
+Auswertung (Sense, Spur- und Disc-Info).
+
+**Auf Hardware:** erst eine kleine Test-ISO (einige hundert MB), dann `Untitled_Project.iso` (18 GB) auf
+`CMCMAG-BA5-000`; beide Male mit „Prüfen“ und mit Reservebereich-Abfrage danach (soll 0 sein).
+
 ## Grundsätze
 
 - **Nur die fertige ISO wird gebrannt, Sektor für Sektor, 1:1.** Das Dateisystem kommt immer aus unserer
   UDF-2.50-Engine (`modules/udf250_writer.py`), auch das 3D-SSIF-Interleaving. Das Brennprogramm des Systems schreibt nur
   die Bytes. Wir geben ihm nie einen Ordner, der dann ein eigenes Dateisystem bekäme. Das ist dieselbe Lehre wie beim
   Ausbau von IMAPI2FS in v1.18.1: Es hat Fehler verdeckt (siehe `modules/iso_tools.py`).
-- **Keine eigene Laufwerksansteuerung** (SCSI/MMC). Wir nutzen den Brenner, den das System mitbringt. Er kennt die
-  Laufwerke, braucht keine Admin-Rechte und ist erprobt.
+- **Möglichst keine eigene Laufwerksansteuerung** (SCSI/MMC). Wir nutzen den Brenner, den das System mitbringt. Er
+  kennt die Laufwerke, braucht keine Admin-Rechte und ist erprobt. **Ausnahme seit v1.34.0:** leere BD-R unter
+  Windows. IMAPI2 schaltet dort die Defektverwaltung ein, und das brach auf echten Rohlingen ab (siehe Plan oben).
+  Die Befehle gehen weiter über IMAPI2 (`IDiscRecorder2Ex`), also ohne Admin-Rechte.
 - **Brennen verbraucht Rohlinge.** Darum wird vorher alles geprüft, was sich prüfen lässt. Der Abbruch wird ehrlich
   beschrieben, und hinterher wird die Disc geprüft.
 - Die Disc wird immer **abgeschlossen** (finalisiert). Multisession gibt es nicht; Player lesen nur abgeschlossene
@@ -70,7 +124,7 @@ ISO lässt sich dort beliebig oft brennen, ohne das Projekt neu zu packen.
 
 | System | Brennen | Laufwerk/Medium abfragen | Auswerfen |
 |---|---|---|---|
-| **Windows 10/11** | IMAPI2 `IDiscFormat2Data.Write` mit der ISO als `IStream` | `IDiscMaster2`, `IDiscRecorder2`, `CurrentPhysicalMediaType`, `FreeSectorsOnMedia`, `MediaHeuristicallyBlank` | `IDiscRecorder2.EjectMedia` |
+| **Windows 10/11** | Leere BD-R: MMC-Befehle über IMAPI2 `IDiscRecorder2Ex` (v1.34.0); sonst IMAPI2 `IDiscFormat2Data.Write` mit der ISO als `IStream` | `IDiscMaster2`, `IDiscRecorder2`, `CurrentPhysicalMediaType`, `FreeSectorsOnMedia`, `MediaHeuristicallyBlank` | `IDiscRecorder2.EjectMedia` |
 | **macOS 13+** | `hdiutil burn <iso> -noeject` (DiscRecording) | `drutil list`, `drutil -drive N status` | `drutil -drive N eject` |
 | **Linux** | `xorriso -as cdrecord dev=/dev/srN -v <iso>` | `xorriso -devices`, `xorriso -outdev /dev/srN -toc` | `xorriso -outdev /dev/srN -eject all` |
 

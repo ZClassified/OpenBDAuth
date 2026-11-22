@@ -5,6 +5,19 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.34.0] - 2026-11-22
+
+### Brennen unter Windows: leere BD-R ohne Defektverwaltung
+
+Anlass: Zwei BD-R-Brände über IMAPI2 brachen kurz vor dem Ende ab und liefen nur mit 1,0–1,7x. ImgBurn brannte dieselbe ISO auf dieselbe Rohling-Sorte (`CMCMAG-BA5-000`) fehlerfrei mit 3,1x. Die Fehlbrand-Disc belegt den Grund: IMAPI2 formatiert eine leere BD-R mit Defektverwaltung (Reservebereich, Nachprüfen jedes Blocks; 14 688 Blöcke ausgelagert). Abschalten lässt sich das bei `IDiscFormat2Data.Write` nicht (`HARDWARE_TESTS.md`, `docs/plaene/brennen.md`).
+
+- **Leere BD-R schreibt OpenBDAuth selbst** (`modules/burn/mmc.py`): MMC-Befehle über IMAPI2 `IDiscRecorder2Ex`, also weiter ohne Admin-Rechte und mit exklusivem Zugriff. Ohne `FORMAT UNIT` bleibt die BD-R unformatiert, ohne Reservebereich und ohne Nachprüfen – wie bei ImgBurn. Ablauf: Vorprüfung (Profil 0x41, Disc leer, nächste Adresse 0, genug Platz), `SET STREAMING` mit der gewählten Stufe (4x = 17 981 kB/s), `WRITE(10)` in Blöcken zu 64 KiB (ein BD-Cluster, der letzte mit Nullen aufgefüllt) mit 64 MiB Vorrat aus der ISO, `SYNCHRONIZE CACHE`, `CLOSE TRACK`, Disc abschließen (lehnt das Laufwerk Funktion 6 ab: Sitzung schließen).
+- **Fehler mit Sense-Code:** IMAPI2 meldet SCSI-Fehler nicht als Ausnahme, nur im Sense-Puffer; ausgewertet wird jeder Befehl. Fehlermeldung z. B. „Sense 3/0C/00 WRITE ERROR bei LBA …“, im Protokoll die nächste beschreibbare Adresse danach. „Long write in progress“ (Puffer voll) wird abgewartet, UNIT ATTENTION wiederholt.
+- **Protokoll:** Profil, Disc-Status, freie Sektoren, Übertragungsgröße; Fortschritt alle 10 % mit Zeit, Rate und Restzeit; nach dem Brennen der Zustand der Disc mit Reservebereich (soll „kein Reservebereich“ sein). „Diagnose kopieren“ enthält dieselbe Zeile.
+- **Freier Platz einer leeren BD-R:** IMAPI2 meldet nur den Platz nach dem Formatieren (11 826 176 Sektoren bei BD-R 25 GB); jetzt gilt der echte Wert aus `READ TRACK INFORMATION` (12 219 392). ISOs bis zur vollen Größe passen.
+- **Unverändert über IMAPI2:** BD-RE (löschen und schreiben), nicht leere BD-R und alles, was die Vorprüfung nicht besteht (mit Zeile im Protokoll).
+- **Tests:** `tests/test_burn_mmc.py` mit nachgebildetem Laufwerk (Befehlsfolge, Auffüllen, Puffer voll, Dauer-„beschäftigt“, Schreibfehler, Abbruch, abgelehntes Abschließen und abgelehnte Geschwindigkeit, behobene Fehler, Rückfall auf IMAPI2, freier Platz) und echten Antworten des BP40NS20.
+
 ## [1.33.1] - 2026-11-22
 
 ### Brennen: echter Fehlercode, passender Hinweis

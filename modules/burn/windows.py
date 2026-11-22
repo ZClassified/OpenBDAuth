@@ -43,6 +43,8 @@ import time
 from contextlib import contextmanager
 from typing import Dict, List, Optional, Tuple
 
+from modules.burn import mmc
+from modules.burn.mmc import BD_1X_SECTORS, WriteClock, duration_text, factor_text   # noqa: F401 (auch für Tests)
 from modules.burn.model import (
     BurnCancelled, BurnError, BurnOptions, BurnResult, Drive, Media, PHASE_ERASE, PHASE_PREPARE, PHASE_VERIFY,
     PHASE_WRITE,
@@ -79,7 +81,6 @@ ACTION_NAMES = {ACTION_VALIDATING: "Prüfen der Disc", ACTION_FORMATTING: "Forma
                 ACTION_VERIFYING: "Stichprobe"}
 
 BD_WRITE_PROFILES = {0x41, 0x42, 0x43}          # BD-R sequentiell, BD-R random, BD-RE
-BD_1X_SECTORS = 4_500_000 / 2048                # 1x Blu-ray = 36 Mbit/s ≈ 2197 Sektoren/s
 
 COINIT_MULTITHREADED = 0x0
 RPC_E_CHANGED_MODE = -2147417850                # Thread hat COM schon anders initialisiert (z. B. GUI-Thread, STA)
@@ -91,6 +92,7 @@ FILE_ATTRIBUTE_NORMAL = 0x80
 # IIDs der Ereignis-Schnittstellen (imapi2.dll)
 IID_DATA_EVENTS = "{2735413C-7F64-5B0F-8F00-5D77AFBE261E}"
 IID_ERASE_EVENTS = "{2735413A-7F64-5B0F-8F00-5D77AFBE261E}"
+IID_RECORDER_EX = "{27354132-7F64-5B0F-8F00-5D77AFBE261E}"   # IDiscRecorder2Ex: MMC-Befehle ans Laufwerk
 
 
 # --- Auswertung (rein, ohne COM; auf allen Systemen testbar) ---------------------------------
@@ -140,6 +142,11 @@ def media_from_values(media_type: int, state: int, blank: bool, free: int, total
         overwritable_blocks=total if rewritable else 0,
         speeds=labels, status=status_text(state),
     )
+
+
+def is_blank_bd_r(media: Media) -> bool:
+    """Leere BD-R: schreibt OpenBDAuth selbst mit MMC-Befehlen (ohne Defektverwaltung, v1.34.0)."""
+    return media.present and media.kind == "BD-R" and media.blank
 
 
 def hresult(code: int) -> int:
@@ -215,36 +222,6 @@ def com_error_text(error) -> str:
     text = str(details[0]).strip() if details and details[0] else (getattr(error, "text", "") or str(error))
     code = error_code(error)
     return f"{text} (0x{code:08X})" if code is not None else text
-
-
-def duration_text(seconds: float) -> str:
-    """125 → „2:05“, 3725 → „1:02:05“."""
-    seconds = max(0, int(round(seconds)))
-    hours, rest = divmod(seconds, 3600)
-    minutes, secs = divmod(rest, 60)
-    return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
-
-
-def factor_text(sectors_per_second: float) -> str:
-    return f"{sectors_per_second / BD_1X_SECTORS:.1f}x"
-
-
-class WriteClock:
-    """Zeit und Schreibrate fürs Protokoll. IMAPI2s RemainingTime taugt nicht (im echten Lauf ab 30 % nur 0 s);
-    die Rate wird je Abschnitt zwischen zwei Protokollzeilen gemessen, so sieht man auch, wenn das Laufwerk bremst."""
-
-    def __init__(self, started: float):
-        self.started = started
-        self.mark: Optional[Tuple[float, int]] = None      # (Zeit, LBA) der letzten Zeile
-
-    def text(self, now: float, end_lba: int, last_lba: int) -> str:
-        parts = [duration_text(now - self.started)]
-        if self.mark is not None and now > self.mark[0] and last_lba > self.mark[1]:
-            rate = (last_lba - self.mark[1]) / (now - self.mark[0])
-            parts.append(f"{factor_text(rate)} ({rate:.0f} Sektoren/s)")
-            parts.append(f"noch ca. {duration_text(max(0, end_lba - last_lba) / rate)}")
-        self.mark = (now, last_lba)
-        return " · ".join(parts)
 
 
 def failure_text(elapsed: float, start_lba: Optional[int], count: int, last_lba: Optional[int], state: str) -> str:
@@ -423,6 +400,124 @@ def _advise(com_object, interface, sink):
             pass
 
 
+_RECORDER_EX = None
+
+
+def _recorder_ex_interface():
+    """IDiscRecorder2Ex nachgebildet (Vtable-Reihenfolge aus der Typbibliothek; alle Parameter als „in“, damit
+    comtypes nichts umwandelt). Gebraucht werden nur die drei SendCommand-Methoden und die Übertragungsgrößen; die
+    zwölf dazwischen sind Platzhalter."""
+    global _RECORDER_EX
+    if _RECORDER_EX is None:
+        from comtypes import COMMETHOD, GUID, HRESULT, IUnknown
+        u8p = ctypes.POINTER(ctypes.c_ubyte)
+        ulong, pulong = ctypes.c_ulong, ctypes.POINTER(ctypes.c_ulong)
+
+        class IDiscRecorder2Ex(IUnknown):
+            _iid_ = GUID(IID_RECORDER_EX)
+            _methods_ = [
+                COMMETHOD([], HRESULT, "SendCommandNoData", (["in"], u8p, "cdb"), (["in"], ulong, "cdbSize"),
+                          (["in"], u8p, "sense"), (["in"], ulong, "timeout")),
+                COMMETHOD([], HRESULT, "SendCommandSendDataToDevice", (["in"], u8p, "cdb"),
+                          (["in"], ulong, "cdbSize"), (["in"], u8p, "sense"), (["in"], ulong, "timeout"),
+                          (["in"], u8p, "buffer"), (["in"], ulong, "bufferSize")),
+                COMMETHOD([], HRESULT, "SendCommandGetDataFromDevice", (["in"], u8p, "cdb"),
+                          (["in"], ulong, "cdbSize"), (["in"], u8p, "sense"), (["in"], ulong, "timeout"),
+                          (["in"], u8p, "buffer"), (["in"], ulong, "bufferSize"), (["in"], pulong, "fetched")),
+            ] + [COMMETHOD([], HRESULT, f"_unused{i}") for i in range(12)] + [
+                COMMETHOD([], HRESULT, "GetByteAlignmentMask", (["in"], pulong, "value")),
+                COMMETHOD([], HRESULT, "GetMaximumNonPageAlignedTransferSize", (["in"], pulong, "value")),
+                COMMETHOD([], HRESULT, "GetMaximumPageAlignedTransferSize", (["in"], pulong, "value")),
+            ]
+        _RECORDER_EX = IDiscRecorder2Ex
+    return _RECORDER_EX
+
+
+class MmcDevice(mmc.Device):
+    """Das Laufwerk für mmc.Drive, über IMAPI2 (IDiscRecorder2Ex, keine Admin-Rechte). Ein SCSI-Fehler kommt nicht
+    als Ausnahme, sondern als S_IMAPI_COMMAND_HAS_SENSE_DATA bzw. nur im Sense-Puffer – ausgewertet wird immer der
+    Puffer. Daten laufen über einen seitenweise ausgerichteten Puffer (VirtualAlloc)."""
+
+    def __init__(self, recorder):
+        self.ex = recorder._comobj.QueryInterface(_recorder_ex_interface())
+        self.max_transfer = max(mmc.SECTOR, self._value("GetMaximumPageAlignedTransferSize", 65536))
+        self.alignment = self._value("GetByteAlignmentMask", 0)
+        kernel32 = ctypes.windll.kernel32
+        kernel32.VirtualAlloc.restype = ctypes.c_void_p
+        kernel32.VirtualAlloc.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_ulong, ctypes.c_ulong]
+        kernel32.VirtualFree.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_ulong]
+        self._size = max(self.max_transfer, 65536)
+        self._address = kernel32.VirtualAlloc(None, self._size, 0x3000, 0x04)    # MEM_COMMIT|RESERVE, READWRITE
+        if not self._address:
+            raise OSError("VirtualAlloc fehlgeschlagen")
+        self._buffer = ctypes.cast(self._address, ctypes.POINTER(ctypes.c_ubyte))
+
+    def _value(self, name: str, default: int) -> int:
+        value = ctypes.c_ulong(0)
+        try:
+            getattr(self.ex, name)(ctypes.byref(value))
+            return int(value.value) or default
+        except Exception:
+            return default
+
+    def close(self):
+        if self._address:
+            ctypes.windll.kernel32.VirtualFree(self._address, 0, 0x8000)              # MEM_RELEASE
+            self._address = None
+
+    def command(self, cdb, data_out=None, data_in=0, timeout=mmc.TIMEOUT_SHORT):
+        cdb_buffer = (ctypes.c_ubyte * len(cdb)).from_buffer_copy(bytes(cdb))
+        sense = (ctypes.c_ubyte * 18)()
+        fetched = ctypes.c_ulong(0)
+        try:
+            if data_out is not None:
+                if len(data_out) > self._size:
+                    raise ValueError(f"{len(data_out)} Byte > Puffer {self._size}")
+                ctypes.memmove(self._address, bytes(data_out), len(data_out))
+                self.ex.SendCommandSendDataToDevice(cdb_buffer, len(cdb), sense, timeout, self._buffer,
+                                                    len(data_out))
+            elif data_in:
+                self.ex.SendCommandGetDataFromDevice(cdb_buffer, len(cdb), sense, timeout, self._buffer,
+                                                     min(data_in, self._size), ctypes.byref(fetched))
+            else:
+                self.ex.SendCommandNoData(cdb_buffer, len(cdb), sense, timeout)
+        except Exception as e:
+            found = mmc.parse_sense(bytes(sense))
+            if found is not None:
+                return found, b""
+            raise BurnError(f"Befehl 0x{cdb[0]:02X} an das Laufwerk: {com_error_text(e)}", PHASE_WRITE)
+        data = ctypes.string_at(self._address, fetched.value) if data_in and fetched.value else b""
+        return mmc.parse_sense(bytes(sense)), data
+
+
+def _blank_bd_r_free_blocks(recorder) -> Optional[int]:
+    """Freie Blöcke einer leeren BD-R ohne Formatierung (READ TRACK INFORMATION). IMAPI2 meldet nur den Platz nach
+    dem Formatieren mit Reservebereich (11 826 176 statt 12 219 392 Sektoren bei BD-R 25 GB)."""
+    device = None
+    try:
+        device = MmcDevice(recorder)
+        info = mmc.Drive(device).track()
+        return info.get("free") or None
+    except Exception:
+        return None
+    finally:
+        if device is not None:
+            device.close()
+
+
+def _mmc_summary(recorder) -> str:
+    """Für die Diagnose: Profil, Disc, Spur und Reservebereich direkt vom Laufwerk."""
+    device = None
+    try:
+        device = MmcDevice(recorder)
+        return mmc.Drive(device).summary()
+    except Exception as e:
+        return f"nicht lesbar ({type(e).__name__}: {e})"
+    finally:
+        if device is not None:
+            device.close()
+
+
 def _recorders() -> List[Tuple[str, object]]:
     master = _create("IMAPI2.MsftDiscMaster2")
     result = []
@@ -468,6 +563,10 @@ def _read_media(recorder) -> Tuple[Media, Dict[str, int]]:
             pass
     media = media_from_values(media_type, int(data.CurrentMediaStatus), bool(data.MediaHeuristicallyBlank),
                               int(data.FreeSectorsOnMedia), int(data.TotalSectorsOnMedia), sectors)
+    if is_blank_bd_r(media):
+        free = _blank_bd_r_free_blocks(recorder)      # leere BD-R schreibt OpenBDAuth selbst, ohne Reservebereich
+        if free:
+            media.free_blocks = free
     speeds = {}
     for value in sorted(set(sectors)):
         speeds.setdefault(speed_label(value), value)
@@ -591,6 +690,8 @@ class WindowsBackend:
                 self._erase(recorder, report)
                 if report.cancelled():
                     raise BurnCancelled(PHASE_ERASE)
+            if is_blank_bd_r(media) and self._burn_mmc(recorder, iso_path, options, report, speeds):
+                return
             writer = _create("IMAPI2.MsftDiscFormat2Data")
             writer.Recorder = recorder
             writer.ClientName = CLIENT_NAME
@@ -694,6 +795,42 @@ class WindowsBackend:
             except Exception:
                 pass
 
+    def _burn_mmc(self, recorder, iso_path: str, options: BurnOptions, report, speeds: Dict[str, int]) -> bool:
+        """Leere BD-R selbst schreiben, ohne Defektverwaltung (mmc.BdrWriter). False: Gerät nicht erreichbar oder die
+        Disc passt nicht – dann brennt IMAPI2 wie bisher. Fehler nach dem Schreibstart werden nicht umgeleitet."""
+        try:
+            device = MmcDevice(recorder)
+        except Exception as e:
+            report.log(f"MMC: kein Zugriff auf das Laufwerk ({type(e).__name__}: {e}) – brenne über IMAPI2")
+            return False
+        try:
+            writer = mmc.BdrWriter(mmc.Drive(device), report)
+            sectors = -(-os.path.getsize(iso_path) // mmc.SECTOR)
+            try:
+                state, problem = writer.check(sectors)
+            except (mmc.MmcError, BurnError) as e:
+                report.log(f"MMC: Vorprüfung fehlgeschlagen ({e}) – brenne über IMAPI2")
+                return False
+            report.log(f"MMC: Profil 0x{state.profile:02X} · Disc-Status {state.disc_status} · "
+                       f"{state.free_blocks} Sektoren frei · Spurgröße {state.track_size} · "
+                       f"Übertragung bis {device.max_transfer} Byte")
+            if problem:
+                report.log(f"MMC: {problem} – brenne über IMAPI2")
+                return False
+            report.log("MMC: leere BD-R – OpenBDAuth schreibt selbst, ohne Defektverwaltung (wie ImgBurn)")
+            if report.cancelled():
+                raise BurnCancelled(PHASE_PREPARE)
+            if options.speed and options.speed in speeds:
+                writer.set_speed(mmc.kbytes_per_second(speeds[options.speed]), state.free_blocks - 1)
+            elif options.speed:
+                report.log(f"MMC: {options.speed} wird für dieses Medium nicht angeboten – das Laufwerk wählt")
+            else:
+                report.log("MMC: keine Geschwindigkeit gesetzt – das Laufwerk wählt")
+            writer.write(iso_path, mmc.chunk_sectors(device.max_transfer))
+            return True
+        finally:
+            device.close()
+
     def diagnose(self) -> str:
         """Rohwerte von IMAPI2 für Rückmeldungen (nur lesend)."""
         parts = [f"comtypes: {self._error or 'ok'}", f"Windows: {sys.getwindowsversion()}"
@@ -728,6 +865,7 @@ class WindowsBackend:
                             for d in tuple(data.SupportedWriteSpeedDescriptors or ())))
                     except Exception as e:
                         parts.append(f"Medium: {com_error_text(e)}")
+                    parts.append("MMC: " + _mmc_summary(recorder))
                     device = device_path(recorder.VolumePathNames)
                     if device:
                         from modules.burn.verify import device_size

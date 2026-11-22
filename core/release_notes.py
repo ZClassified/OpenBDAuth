@@ -48,6 +48,19 @@ def date_text(release: Release, lang: str) -> str:
 
 
 RELEASES: Tuple[Release, ...] = (
+    Release("1.34.0", "2026-11-22",
+            de=Notes("Zuverlässiger BD-R brennen unter Windows", (
+                "Leere BD-R schreibt OpenBDAuth unter Windows jetzt selbst, ohne die Defektverwaltung von Windows. "
+                "Damit brannten Rohlinge zuvor nur langsam und brachen kurz vor dem Ende ab.",
+                "Der volle Platz einer BD-R steht zur Verfügung (25 GB statt rund 24,2 GB).",
+                "Bei einem Brennfehler nennt das Protokoll den genauen Fehlercode des Laufwerks.",
+            )),
+            en=Notes("More reliable BD-R burning on Windows", (
+                "On Windows, OpenBDAuth now writes blank BD-R discs itself, without Windows' defect management. "
+                "With it, discs burned slowly and failed shortly before the end.",
+                "The full capacity of a BD-R is available (25 GB instead of about 24.2 GB).",
+                "After a burn error, the log shows the drive's exact error code.",
+            ))),
     Release("1.33.1", "2026-11-22",
             de=Notes("Klarere Brennfehler", (
                 "Unter Windows steht nach einem Brennfehler der echte Fehlercode von Windows in der Meldung, nicht "
