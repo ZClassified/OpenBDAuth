@@ -77,7 +77,8 @@ class TestValues(unittest.TestCase):
             hresult = -2147352567
             text = "Ausnahmefehler aufgetreten."
             details = ("Für die Anforderung muss ein aktueller CD-Rekorder ausgewählt sein.\r\n", None)
-        text = windows.com_error_text(FakeComError())
+        with mock.patch.object(windows, "imapi_messages", dict):          # ohne Meldungstabelle: die Hülle
+            text = windows.com_error_text(FakeComError())
         self.assertIn("CD-Rekorder", text)
         self.assertIn("0x80020009", text)
 
@@ -95,6 +96,30 @@ class TestValues(unittest.TestCase):
         self.assertIn("Fehler beim Schreiben", text)
         self.assertIn("0xC0AA0301", text)
         self.assertNotIn("0x80020009", text)
+
+    def test_code_from_message_table_when_scode_is_empty(self):
+        """Fehlbrand 2026-11-22: IMAPI2 ließ scode leer (0). Der Code wird dann über den Text in der Meldungstabelle
+        von imapi2.dll gesucht (Leerraum und Zeilenumbrüche zählen nicht)."""
+        table = {0xC0AA0300: "Fehler beim Schreiben. Das Laufwerk hat die Daten nicht schnell genug empfangen.",
+                 0xC0AA0301: "Fehler beim Schreiben. Das Laufwerk hat Fehlerinformationen zurückgegeben. Der "
+                             "Fehler ist nicht behebbar.\r\n"}
+
+        class FakeComError(Exception):
+            hresult = -2147352567
+            text = "Ausnahmefehler aufgetreten."
+            details = ("Fehler beim Schreiben. Das Laufwerk hat Fehlerinformationen zurückgegeben. Der Fehler ist "
+                       "nicht behebbar.", "IMAPI2", None, 0, 0)
+        with mock.patch.object(windows, "imapi_messages", lambda: table):
+            text = windows.com_error_text(FakeComError())
+            self.assertTrue(text.endswith("(0xC0AA0301)"))
+            FakeComError.details = ("Etwas anderes.", "IMAPI2", None, 0, 0)
+            self.assertIn("(0x80020009)", windows.com_error_text(FakeComError()))     # nicht gefunden: Hülle
+
+    @unittest.skipUnless(sys.platform == "win32", "nur unter Windows")
+    def test_real_message_table_has_imapi_codes(self):
+        messages = windows.imapi_messages()
+        self.assertIn(0xC0AA0301, messages)
+        self.assertIn(windows.E_IMAPI_REQUEST_CANCELLED, messages)
 
     def test_com_error_text_with_odd_details(self):
         class FakeComError(Exception):

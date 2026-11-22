@@ -5,6 +5,17 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.33.1] - 2026-11-22
+
+### Brennen: echter Fehlercode, passender Hinweis
+
+Anlass: Die Gegenprobe mit 4x auf einer neuen BD-R (MediaRange 25 GB, wie beim ersten Fehlbrand) brach wieder ab (bei 96,8 %). Das Laufwerk schrieb dabei nur mit 1,0–1,5x. In der Meldung stand weiter `0x80020009`, und der Hinweis riet zu „2× oder 4×“, obwohl schon mit 4× gebrannt worden war (`HARDWARE_TESTS.md`).
+
+- **Echter Fehlercode (Windows):** IMAPI2 lässt `EXCEPINFO.scode` teils leer (0). Dann wird der Code über den Meldungstext in der Meldungstabelle von `imapi2.dll` gesucht (Facility `0xAA`, in der Sprache von Windows). Im Fehlbrand: `0xC0AA0301` (E_IMAPI_UNEXPECTED_RESPONSE_FROM_DEVICE, das Laufwerk hat einen nicht behebbaren Fehler gemeldet). Ohne Treffer bleibt `0x80020009`.
+- **Hinweis nach einem Schreibfehler passt zur Stufe:** Bei BD-R nennt er die langsamste angebotene Stufe unter der benutzten („Beim nächsten Versuch 2× wählen …“). Wurde schon mit der langsamsten gebrannt, sagt er, dass Laufwerk und Rohlinge vermutlich nicht zusammenpassen, und rät zu einer anderen Marke. Sind keine Stufen bekannt, bleibt der allgemeine Hinweis.
+- **Protokoll nach einem Fehler (Windows):** Die Fehlerzeile nennt auch, wie viele Fortschrittsereignisse ankamen (bisher nur nach einem erfolgreichen Brand).
+- **Tests:** Code aus der Meldungstabelle (nachgebildet und unter Windows mit der echten `imapi2.dll`), langsamere Stufe für den Hinweis, die drei Hinweise auf der Brenn-Seite.
+
 ## [1.33.0] - 2026-11-21
 
 ### Brennen: sicherere Geschwindigkeit, verständliche Fehler

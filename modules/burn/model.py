@@ -38,6 +38,19 @@ def auto_speed(speeds: List[str]) -> str:
     return max(allowed)[1] if allowed else min(known)[1]
 
 
+def slower_speed(used: str, speeds: List[str]) -> str:
+    """Für den Hinweis nach einem Schreibfehler: die langsamste angebotene Stufe unter der benutzten. Leer, wenn
+    schon mit der langsamsten gebrannt wurde oder nichts bekannt ist. Hat das Laufwerk selbst gewählt (used leer),
+    die langsamste Stufe, sofern es mehrere gibt."""
+    known = sorted((f, s) for s in speeds or () for f in (speed_factor(s),) if f is not None and f > 0)
+    if not known:
+        return ""
+    used_factor = speed_factor(used) if used else None
+    if used_factor is None:
+        return known[0][1] if len(known) > 1 else ""
+    return known[0][1] if known[0][0] < used_factor else ""
+
+
 def resolve_speed(choice: str, media: Optional["Media"]) -> str:
     """Die Stufe, mit der gebrannt wird: eine ausdrückliche Wahl bleibt, „Automatisch“ wird über auto_speed
     aufgelöst."""

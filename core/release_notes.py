@@ -48,6 +48,18 @@ def date_text(release: Release, lang: str) -> str:
 
 
 RELEASES: Tuple[Release, ...] = (
+    Release("1.33.1", "2026-11-22",
+            de=Notes("Klarere Brennfehler", (
+                "Unter Windows steht nach einem Brennfehler der echte Fehlercode von Windows in der Meldung, nicht "
+                "mehr nur ein allgemeiner.",
+                "Der Hinweis nach einem Schreibfehler richtet sich nach der benutzten Geschwindigkeit: Er nennt die "
+                "nächst langsamere Stufe oder rät, wenn schon die langsamste lief, zu Rohlingen einer anderen Marke.",
+            )),
+            en=Notes("Clearer burn errors", (
+                "On Windows, a burn error now shows the real error code from Windows instead of only a generic one.",
+                "The hint after a write error depends on the speed used: it names the next slower speed or, if the "
+                "slowest was already used, suggests discs of a different brand.",
+            ))),
     Release("1.33.0", "2026-11-21",
             de=Notes("Sichereres Brennen", (
                 "„Automatisch“ brennt jetzt mit höchstens 4× statt mit der höchsten Stufe des Laufwerks. Das schont "

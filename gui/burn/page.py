@@ -30,7 +30,8 @@ from modules.burn import checks
 from modules.burn.iso_info import IsoInfo, read_iso_info
 from modules.burn.job import BurnRun, MAX_COPIES, should_eject
 from modules.burn.model import (
-    BurnOptions, Drive, Media, PHASE_VERIFY, PHASE_WRITE, SPEED_AUTO, auto_speed, resolve_speed, speed_factor,
+    BurnOptions, Drive, Media, PHASE_VERIFY, PHASE_WRITE, SPEED_AUTO, auto_speed, resolve_speed, slower_speed,
+    speed_factor,
 )
 
 POLL_MS = 200
@@ -100,6 +101,8 @@ class BurnPage(QWidget):
         self.verify_after = False
         self.speed = SPEED_AUTO
         self._burn_rewritable = False                # Medium des laufenden Brands (für den Hinweis nach Fehlern)
+        self._burn_speed = ""                        # Stufe des laufenden Brands und die angebotenen Stufen
+        self._burn_speeds: List[str] = []
         self.prepare_running = lambda: False     # setzt das Studio: läuft die Warteschlange in Vorbereiten?
         self.run: Optional[BurnRun] = None
         self._copy = 0
@@ -793,6 +796,8 @@ class BurnPage(QWidget):
         options = BurnOptions(speed=speed, verify=self.verify_after,
                               erase=bool(self.media is not None and self.media.needs_erase))
         self._burn_rewritable = bool(self.media is not None and self.media.is_rewritable)
+        self._burn_speed = speed
+        self._burn_speeds = list(self.media.speeds) if self.media is not None and self.media.present else []
         eject = should_eject(self._copy, self._copies, self.eject_after)
         if self._copies > 1:
             self._log(self.t("burn_log_copy", n=self._copy, total=self._copies))
@@ -872,9 +877,20 @@ class BurnPage(QWidget):
             return "fail", self.t("burn_result_verify_failed", err=outcome.error)
         text = self.t("burn_result_failed", err=outcome.error)
         if outcome.phase == PHASE_WRITE:          # das Laufwerk hat die Disc nicht fertig geschrieben
-            text += "\n" + self.t("burn_hint_write_failed_rewritable" if self._burn_rewritable
-                                   else "burn_hint_write_failed")
+            text += "\n" + self._write_failed_hint()
         return "fail", text
+
+    def _write_failed_hint(self) -> str:
+        """Was nach einem Schreibfehler hilft – abhängig von der Stufe, mit der gebrannt wurde (v1.33.1: der Hinweis
+        riet zu „2× oder 4×“, obwohl schon mit 4× gebrannt worden war)."""
+        if self._burn_rewritable:
+            return self.t("burn_hint_write_failed_rewritable")
+        slower = slower_speed(self._burn_speed, self._burn_speeds)
+        if slower:
+            return self.t("burn_hint_write_failed", speed=speed_text(slower))
+        if self._burn_speed and self._burn_speeds:
+            return self.t("burn_hint_write_failed_slowest", speed=speed_text(self._burn_speed))
+        return self.t("burn_hint_write_failed_generic")
 
     def _on_copy_done(self, run: BurnRun):
         outcome = run.outcome

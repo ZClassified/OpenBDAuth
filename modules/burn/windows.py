@@ -24,6 +24,10 @@ behebbar.“ Lesbar waren danach 98,6 % (bis LBA 8 674 911), Status nur NON_EMPT
 EXCEPINFO.scode (comtypes: details[4]); IMAPI2s RemainingTime war ab 30 % nur noch 0 s. Daher: „Automatisch“ höchstens
 4x (model.auto_speed), echte Geschwindigkeit, eigene Zeit/Rate und der Zustand nach einem Fehler im Protokoll.
 
+Zweiter Fehlbrand (BD-R, 4x, v1.33.0, 2026-11-22): Das Laufwerk schrieb nur mit 1,0–1,5x, zuletzt 0,7x, und hörte bei
+96,8 % auf (lesbar bis LBA 8 511 487, IMAPI2 zuletzt 8 511 871). Diesmal war scode 0; der Text gehört zu 0xC0AA0301
+(E_IMAPI_UNEXPECTED_RESPONSE_FROM_DEVICE), daher die Suche in der Meldungstabelle (error_code).
+
 Brennen: die ISO als IStream (SHCreateStreamOnFileEx, nur lesend) an IDiscFormat2Data.Write. Write schreibt den
 Datenstrom roh, Sektor für Sektor – anders als IMAPI2FS (Dateisystem-Abbild), das in v1.18.1 entfernt wurde.
 ForceMediaToBeClosed schließt die Disc ab. Fortschritt über DDiscFormat2DataEvents.Update; Abbrechen mit
@@ -80,6 +84,7 @@ BD_1X_SECTORS = 4_500_000 / 2048                # 1x Blu-ray = 36 Mbit/s ≈ 219
 COINIT_MULTITHREADED = 0x0
 RPC_E_CHANGED_MODE = -2147417850                # Thread hat COM schon anders initialisiert (z. B. GUI-Thread, STA)
 E_IMAPI_REQUEST_CANCELLED = 0xC0AA0002
+DISP_E_EXCEPTION = 0x80020009
 STGM_READ, STGM_SHARE_DENY_WRITE = 0x0, 0x20
 FILE_ATTRIBUTE_NORMAL = 0x80
 
@@ -146,13 +151,61 @@ def _details(error) -> tuple:
     return details if isinstance(details, tuple) else ()
 
 
+def _normalized(text) -> str:
+    return " ".join(str(text or "").split())
+
+
+def code_from_messages(text, messages: Dict[int, str]) -> Optional[int]:
+    """Der Fehlercode zu einem Meldungstext aus der Meldungstabelle von IMAPI2 (Code → Text)."""
+    wanted = _normalized(text)
+    if not wanted:
+        return None
+    for code, message in messages.items():
+        if _normalized(message) == wanted:
+            return code
+    return None
+
+
+_MESSAGES: Optional[Dict[int, str]] = None
+IMAPI_MESSAGE_RANGES = (0xC0AA0000, 0x80AA0000, 0x40AA0000, 0x00AA0000)      # IMAPI2-Codes: Facility 0xAA
+
+
+def imapi_messages() -> Dict[int, str]:
+    """Die Meldungstabelle von imapi2.dll (Code → Text in der Sprache von Windows), einmal je Prozess gelesen. Ohne
+    Windows oder ohne imapi2.dll leer."""
+    global _MESSAGES
+    if _MESSAGES is None:
+        _MESSAGES = {}
+        try:
+            from ctypes import wintypes
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel32.LoadLibraryExW.restype = wintypes.HMODULE
+            kernel32.FormatMessageW.argtypes = [wintypes.DWORD, wintypes.HMODULE, wintypes.DWORD, wintypes.DWORD,
+                                                wintypes.LPWSTR, wintypes.DWORD, ctypes.c_void_p]
+            module = kernel32.LoadLibraryExW("imapi2.dll", None, 0x2)      # LOAD_LIBRARY_AS_DATAFILE
+            if module:
+                buffer = ctypes.create_unicode_buffer(2048)
+                for base in IMAPI_MESSAGE_RANGES:
+                    for index in range(0x400):
+                        if kernel32.FormatMessageW(0x800 | 0x200, module, base | index, 0, buffer, 2048, None):
+                            _MESSAGES[base | index] = buffer.value
+        except Exception:
+            pass
+    return _MESSAGES
+
+
 def error_code(error) -> Optional[int]:
     """Der eigentliche Fehlercode. Über IDispatch kommt jeder IMAPI2-Fehler als DISP_E_EXCEPTION (0x80020009); den
-    Code von IMAPI2 legt comtypes aus EXCEPINFO.scode in details[4]."""
+    Code von IMAPI2 legt comtypes aus EXCEPINFO.scode in details[4]. Lässt IMAPI2 scode leer (so beim Fehlbrand
+    2026-11-22), wird der Code über den Text in der Meldungstabelle von imapi2.dll gesucht."""
     details = _details(error)
     if len(details) >= 5 and isinstance(details[4], int) and details[4]:
         return hresult(details[4])
     code = getattr(error, "hresult", None)
+    if code is not None and hresult(code) == DISP_E_EXCEPTION and details:
+        found = code_from_messages(details[0], imapi_messages())
+        if found is not None:
+            return found
     return hresult(code) if code is not None else None
 
 
@@ -621,7 +674,7 @@ class WindowsBackend:
                     if cancel_sent.is_set() or error_code(e) == E_IMAPI_REQUEST_CANCELLED:
                         raise BurnCancelled(tracker.phase if tracker.phase != PHASE_PREPARE else PHASE_WRITE)
                     report.log(failure_text(time.monotonic() - started, last["start"], last["count"], last["lba"],
-                                            _media_state(recorder)))
+                                            _media_state(recorder)) + _sink_summary(sink))
                     raise BurnError(com_error_text(e), PHASE_WRITE)
                 finally:
                     done.set()

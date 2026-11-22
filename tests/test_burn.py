@@ -21,7 +21,7 @@ from modules.burn.macos import (
 )
 from modules.burn.model import (
     BurnOptions, Drive, Media, PHASE_ERASE, PHASE_PREPARE, PHASE_VERIFY, PHASE_WRITE, SPEED_AUTO, auto_speed,
-    resolve_speed, speed_factor,
+    resolve_speed, slower_speed, speed_factor,
 )
 
 app_instance = QApplication.instance() or QApplication(sys.argv)
@@ -331,6 +331,16 @@ class TestAutoSpeed(unittest.TestCase):
         self.assertEqual(resolve_speed(SPEED_AUTO, None), SPEED_AUTO)
         self.assertEqual(resolve_speed(SPEED_AUTO, Media(present=False, speeds=["2x"])), SPEED_AUTO)
 
+    def test_slower_speed_for_the_hint(self):
+        """v1.33.1: Nach einem Schreibfehler mit 4x (BD-R mit 2x/4x/6x) rät der Hinweis zu 2x, nach 2x zu nichts."""
+        speeds = ["2x", "4x", "6x"]
+        self.assertEqual(slower_speed("4x", speeds), "2x")
+        self.assertEqual(slower_speed("6x", speeds), "2x")
+        self.assertEqual(slower_speed("2x", speeds), "")
+        self.assertEqual(slower_speed("", speeds), "2x")          # das Laufwerk hat gewählt
+        self.assertEqual(slower_speed("", ["2x"]), "")
+        self.assertEqual(slower_speed("4x", []), "")
+
 
 class TestBurnRun(unittest.TestCase):
     drive = Drive(key="1", name="FAKE", can_write_bd=True)
@@ -505,7 +515,31 @@ class TestBurnPage(TempDirCase):
         self.wait(page)
         self.assertEqual(page.backend.ejects, 0)
         self.assertTrue(page.log_view.isVisibleTo(page))
-        self.assertIn(page.t("burn_hint_write_failed"), page.log_view.toPlainText())    # BD-R: Tipp Geschwindigkeit
+        # BD-R, „Automatisch“ = 4x: Tipp mit der nächst langsameren angebotenen Stufe (v1.33.1)
+        self.assertIn(page.t("burn_hint_write_failed", speed="2×"), page.log_view.toPlainText())
+
+    def test_write_failure_at_slowest_speed_blames_the_discs(self):
+        """v1.33.1: Wurde schon mit der langsamsten Stufe gebrannt, rät der Hinweis nicht mehr zu einer langsameren."""
+        media = blank_bd_r()
+        media.speeds = ["2x"]
+        page = self.make_page(media=media)
+        page.backend.fail_phase = PHASE_WRITE
+        page.set_iso(make_iso(self.tmp))
+        page.start_burn()
+        self.wait(page)
+        log = page.log_view.toPlainText()
+        self.assertIn(page.t("burn_hint_write_failed_slowest", speed="2×"), log)
+        self.assertNotIn(page.t("burn_hint_write_failed", speed="2×"), log)
+
+    def test_write_failure_without_known_speeds_gives_general_hint(self):
+        media = blank_bd_r()
+        media.speeds = []
+        page = self.make_page(media=media)
+        page.backend.fail_phase = PHASE_WRITE
+        page.set_iso(make_iso(self.tmp))
+        page.start_burn()
+        self.wait(page)
+        self.assertIn(page.t("burn_hint_write_failed_generic"), page.log_view.toPlainText())
 
     def test_write_failure_on_bd_re_says_it_can_be_erased(self):
         page = self.make_page(media=used_bd_re())
@@ -515,7 +549,8 @@ class TestBurnPage(TempDirCase):
         self.wait(page)
         log = page.log_view.toPlainText()
         self.assertIn(page.t("burn_hint_write_failed_rewritable"), log)
-        self.assertNotIn(page.t("burn_hint_write_failed"), log)
+        self.assertNotIn(page.t("burn_hint_write_failed_slowest", speed="2×"), log)       # BD-RE: nur 2x
+        self.assertNotIn(page.t("burn_hint_write_failed_generic"), log)
 
     def test_prepare_failure_has_no_write_hint(self):
         page = self.make_page()
@@ -523,7 +558,10 @@ class TestBurnPage(TempDirCase):
         page.set_iso(make_iso(self.tmp))
         page.start_burn()
         self.wait(page)
-        self.assertNotIn(page.t("burn_hint_write_failed"), page.log_view.toPlainText())
+        log = page.log_view.toPlainText()
+        for key in ("burn_hint_write_failed_generic", "burn_hint_write_failed_rewritable"):
+            self.assertNotIn(page.t(key), log)
+        self.assertNotIn(page.t("burn_hint_write_failed", speed="2×"), log)
 
     def test_auto_speed_burns_4x_and_says_so(self):
         page = self.make_page()                          # BD-R mit 2x, 4x, 6x

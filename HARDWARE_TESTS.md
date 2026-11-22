@@ -35,13 +35,23 @@ Der Panasonic hat sich in früheren Versionen als besonders strenger Player erwi
 
 ## Testläufe (neueste zuerst)
 
+### 2026-11-22 · v1.33.0 · `Untitled_Project.iso` · zweiter Fehlbrand auf BD-R unter Windows (4x)
+
+- **Inhalt:** dieselbe ISO wie am 2026-11-21 (8 794 688 Sektoren), gelesen von einer USB-Festplatte (ICY BOX, exFAT).
+- **Laufwerk:** HL-DT-ST BP40NS20 (Firmware ML01) über USB, Windows 11, Medium: **neue BD-R 25 GB von MediaRange**, dieselbe Sorte wie am 21.11. (leer, 11 826 176 freie Sektoren, Stufen 2x/4x/6x). Geschwindigkeit „Automatisch“ = 4x; `SetWriteSpeed(8780)`, `CurrentWriteSpeed` 8780 (4x).
+- **Brennen:** Das Laufwerk erreichte 4x nie. Gemessen je 10 %: 1,0x · 1,1x · 1,2x · 1,3x · 1,4x · 1,4x · 1,5x · 1,4x · 1,1x, danach bis zum Abbruch nur noch 0,7x. Nach 55:06 `CurrentAction 5` (Abschließen), eine Sekunde später derselbe Fehler wie am 21.11.: „Fehler beim Schreiben. Das Laufwerk hat Fehlerinformationen zurückgegeben. Der Fehler ist nicht behebbar.“ IMAPI2 ließ `scode` leer, die Meldung zeigte wieder `0x80020009`. Über die Meldungstabelle von `imapi2.dll` gehört der Text zu **`0xC0AA0301`** (E_IMAPI_UNEXPECTED_RESPONSE_FROM_DEVICE). Ein Pufferproblem wäre `0xC0AA0300`.
+- **Disc danach:** lesbar bis **LBA 8 511 487 (96,78 %)**. IMAPI2 meldete zuletzt LBA 8 511 871; die 384 Sektoren dazwischen entsprechen etwa dem Puffer des Laufwerks. Das Schreiben endete also dort; es fehlen 283 200 Sektoren (≈ 550 MB). Status „non-empty session“, die BD-R ist unbrauchbar. Windows meldete beim Lesen des Endes BLANK CHECK (cdrom 51, Sense Key 8, LBA 8 794 249).
+- **Ausgeschlossen:** Die USB-Platte mit der ISO meldete keine Fehler. 20× „Fehlerhafter Block“ (disk 7) um 11:45 stammen von einem USB-Gerät, das zu der Zeit angesteckt wurde (VID 2CA3, Linux-Gadget); die Schreibrate blieb davor und danach gleich.
+- **Folgerung:** Beide BD-R-Brände (6x und 4x) liefen deutlich unter der gewählten Stufe (Schnitt 1,7x bzw. 1,2x) und brachen kurz vor dem Ende mit einem Laufwerksfehler ab. Die BD-RE lief am 11.11. mit vollen 2x fehlerfrei. Vermutlich kommt das Laufwerk mit diesen BD-R-Rohlingen (MediaRange) nicht zurecht. **Gegenprobe läuft:** dieselbe ISO mit ImgBurn, 4x, auf einer MediaRange BD-R 25 GB. Bricht auch ImgBurn ab, liegt es an Laufwerk oder Rohling, nicht an OpenBDAuth. **Offen:** mit 2x und mit Rohlingen einer anderen Marke brennen; neuere Firmware als ML01 prüfen.
+- **v1.33.1:** echter Fehlercode über die Meldungstabelle, Hinweis passend zur benutzten Stufe, Ereigniszahl in der Fehlerzeile.
+
 ### 2026-11-21 · v1.32.0 · `Untitled_Project.iso` · Fehlbrand auf BD-R unter Windows (6x)
 
 - **Inhalt:** ISO mit 18 011 521 024 Bytes (8 794 688 Sektoren).
-- **Laufwerk:** HL-DT-ST BP40NS20 (Firmware ML01) über USB, Windows 11, Medium: **BD-R 25 GB** (leer, 11 826 176 freie Sektoren, Stufen 2x/4x/6x). Geschwindigkeit „Automatisch“ – IMAPI2 brannte mit der Höchststufe (≈ 13 050 Sektoren/s = 6x).
+- **Laufwerk:** HL-DT-ST BP40NS20 (Firmware ML01) über USB, Windows 11, Medium: **BD-R 25 GB von MediaRange** (leer, 11 826 176 freie Sektoren, Stufen 2x/4x/6x). Geschwindigkeit „Automatisch“ – IMAPI2 brannte mit der Höchststufe (≈ 13 050 Sektoren/s = 6x).
 - **Brennen:** Fortschritt bis 90 % gemeldet, dann `CurrentAction 5` (Abschließen) und Abbruch: „Fehler beim Schreiben. Das Laufwerk hat Fehlerinformationen zurückgegeben. Der Fehler ist nicht behebbar. (0x80020009)“. Dauer rund 40 Minuten; IMAPI2s Restzeit stand ab 30 % auf „0 s“.
 - **Disc danach:** lesbar bis LBA 8 674 911 (98,6 %), die letzten 119 776 Sektoren (≈ 234 MB) unbeschrieben. IMAPI2-Status nur „non-empty session“ (weder abgeschlossen noch erweiterbar). Windows hängt das UDF trotzdem ein; beim Lesen des Endes meldet das Laufwerk BLANK CHECK (Ereignis cdrom 51, Sense Key 8). Die BD-R ist unbrauchbar.
-- **Folgerung (v1.33.0):** „Automatisch“ höchstens 4x, echter Fehlercode, Hinweis nach Schreibfehlern, Zeit/Rate und Disc-Zustand im Protokoll. Gegenprobe mit 4x auf einer neuen BD-R steht aus.
+- **Folgerung (v1.33.0):** „Automatisch“ höchstens 4x, echter Fehlercode, Hinweis nach Schreibfehlern, Zeit/Rate und Disc-Zustand im Protokoll. Gegenprobe mit 4x auf einer neuen BD-R: am 2026-11-22, ebenfalls abgebrochen (siehe oben).
 
 ### 2026-11-11 · v1.32.0-dev · Projekt „D4A“ · `D4A.iso` · erster Brand unter Windows (IMAPI2)
 
