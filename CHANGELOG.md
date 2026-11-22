@@ -5,6 +5,15 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.34.1] - 2026-11-22
+
+### Brennen: Hinweis auf andere Brennprogramme
+
+- **Im Bereich Brennen** steht unter den Optionen, dass die ISO eine gewöhnliche Image-Datei ist und sich auch mit jedem anderen Brennprogramm brennen lässt.
+- **Nach einem Schreibfehler** nennt der Hinweis zusätzlich diesen Weg.
+- Das Beispiel richtet sich nach dem System: ImgBurn unter Windows, K3b unter Linux; unter macOS ohne Beispiel.
+- **Tests:** Hinweis im Bereich je System, Hinweis nach Schreibfehlern, kein Hinweis bei Fehlern vor dem Schreiben.
+
 ## [1.34.0] - 2026-11-22
 
 ### Brennen unter Windows: leere BD-R ohne Defektverwaltung

@@ -13,6 +13,7 @@ Die Einstellungen sind Vorlieben des Nutzers und stehen in den App-Einstellungen
 """
 
 import os
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional
 
@@ -35,6 +36,8 @@ from modules.burn.model import (
 )
 
 POLL_MS = 200
+# Beispiel für ein anderes Brennprogramm je System (macOS: kein gängiges mehr, der Finder brennt keine ISOs mehr)
+OTHER_BURN_PROGRAM = {"win32": "ImgBurn", "linux": "K3b"}
 PROBE_MS = 3000
 MAX_RECENT = 10
 ISO_FILTER = "ISO (*.iso);;Alle Dateien (*.*)"
@@ -332,6 +335,10 @@ class BurnPage(QWidget):
         self.chk_eject.toggled.connect(self._on_eject_option)
         lay.addWidget(self.chk_verify)
         lay.addWidget(self.chk_eject)
+        lay.addSpacing(6)
+        # v1.34.1: Die ISO ist eine gewöhnliche Image-Datei – jedes Brennprogramm kann sie brennen
+        self.lbl_other_programs = hint_label()
+        lay.addWidget(self.lbl_other_programs)
         lay.addStretch(1)
         return card
 
@@ -365,6 +372,7 @@ class BurnPage(QWidget):
         self.chk_verify.setToolTip(self.t("burn_verify_tip"))
         self.chk_eject.setText(self.t("burn_eject_after"))
         self.chk_eject.setToolTip(self.t("burn_eject_after_tip"))
+        self.lbl_other_programs.setText(self.other_program_hint("burn_hint_other_programs"))
         self.set_log_visible(self.log_view.isVisible())
         self._update_all()
 
@@ -877,8 +885,14 @@ class BurnPage(QWidget):
             return "fail", self.t("burn_result_verify_failed", err=outcome.error)
         text = self.t("burn_result_failed", err=outcome.error)
         if outcome.phase == PHASE_WRITE:          # das Laufwerk hat die Disc nicht fertig geschrieben
-            text += "\n" + self._write_failed_hint()
+            text += "\n" + self._write_failed_hint() + " " + self.other_program_hint(
+                "burn_hint_write_failed_other_program")
         return "fail", text
+
+    def other_program_hint(self, key: str) -> str:
+        """„Auch mit einem anderen Brennprogramm brennbar“ (v1.34.1), mit einem Beispiel für dieses System."""
+        program = OTHER_BURN_PROGRAM.get(sys.platform, "")
+        return self.t(key + "_example", program=program) if program else self.t(key)
 
     def _write_failed_hint(self) -> str:
         """Was nach einem Schreibfehler hilft – abhängig von der Stufe, mit der gebrannt wurde (v1.33.1: der Hinweis

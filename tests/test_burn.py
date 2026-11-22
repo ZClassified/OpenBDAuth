@@ -7,6 +7,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
@@ -517,6 +518,34 @@ class TestBurnPage(TempDirCase):
         self.assertTrue(page.log_view.isVisibleTo(page))
         # BD-R, „Automatisch“ = 4x: Tipp mit der nächst langsameren angebotenen Stufe (v1.33.1)
         self.assertIn(page.t("burn_hint_write_failed", speed="2×"), page.log_view.toPlainText())
+
+    def test_hint_other_programs(self):
+        """v1.34.1: Der Bereich sagt, dass die ISO auch mit anderen Brennprogrammen brennbar ist – mit einem Beispiel
+        passend zum System, unter macOS ohne."""
+        from gui.burn import page as page_module
+        page = self.make_page()
+        text = page.lbl_other_programs.text()
+        self.assertEqual(text, page.other_program_hint("burn_hint_other_programs"))
+        with mock.patch.object(page_module.sys, "platform", "win32"):
+            self.assertIn("ImgBurn", page.other_program_hint("burn_hint_other_programs"))
+        with mock.patch.object(page_module.sys, "platform", "darwin"):
+            self.assertEqual(page.other_program_hint("burn_hint_other_programs"), page.t("burn_hint_other_programs"))
+
+    def test_write_failure_mentions_other_programs(self):
+        page = self.make_page()
+        page.backend.fail_phase = PHASE_WRITE
+        page.set_iso(make_iso(self.tmp))
+        page.start_burn()
+        self.wait(page)
+        self.assertIn(page.other_program_hint("burn_hint_write_failed_other_program"), page.lbl_result.text())
+
+    def test_prepare_failure_does_not_mention_other_programs(self):
+        page = self.make_page()
+        page.backend.fail_phase = PHASE_PREPARE
+        page.set_iso(make_iso(self.tmp))
+        page.start_burn()
+        self.wait(page)
+        self.assertNotIn(page.other_program_hint("burn_hint_write_failed_other_program"), page.lbl_result.text())
 
     def test_write_failure_at_slowest_speed_blames_the_discs(self):
         """v1.33.1: Wurde schon mit der langsamsten Stufe gebrannt, rät der Hinweis nicht mehr zu einer langsameren."""

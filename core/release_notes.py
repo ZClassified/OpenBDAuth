@@ -48,6 +48,15 @@ def date_text(release: Release, lang: str) -> str:
 
 
 RELEASES: Tuple[Release, ...] = (
+    Release("1.34.1", "2026-11-22",
+            de=Notes("Hinweis auf andere Brennprogramme", (
+                "Der Bereich Brennen erinnert daran, dass sich die ISO auch mit jedem anderen Brennprogramm brennen "
+                "lässt – auch im Hinweis nach einem Schreibfehler.",
+            )),
+            en=Notes("Hint about other burning programs", (
+                "The Burn area mentions that the ISO can also be burned with any other burning program – also in "
+                "the hint after a write error.",
+            ))),
     Release("1.34.0", "2026-11-22",
             de=Notes("Zuverlässiger BD-R brennen unter Windows", (
                 "Leere BD-R schreibt OpenBDAuth unter Windows jetzt selbst, ohne die Defektverwaltung von Windows. "
