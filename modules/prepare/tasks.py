@@ -17,12 +17,14 @@ import uuid
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Tuple
 
-from modules.prepare import jobs, use_bundled_tools
+from modules.prepare import jobs, uhd, use_bundled_tools
 
 OUT_DIR_NAME = "Disc-fertig"          # fester Name, unabhängig von der Oberflächensprache (Konzept, Ausgabeordner)
 STAGING_DIR_NAME = "_unfertig"        # darin entsteht ein Auftrag; fertige Dateien werden erst danach verschoben
 
 KIND_2D, KIND_3D, KIND_AUDIO = "2d", "3d", "audio"
+KIND_UHD = "uhd"                           # Ultra HD Blu-ray: HEVC mit x265 (modules/prepare/uhd.py)
+DISC_BLURAY, DISC_UHD = "bluray", "uhd"    # wie core.disc_model (Disc-Typ des Projekts)
 WAITING, RUNNING, DONE, FAILED, CANCELLED = "waiting", "running", "done", "failed", "cancelled"
 
 BITRATES_2D = (25, 20, 15)                 # Mbit/s (Mittel), wie BD3DEnc
@@ -54,6 +56,12 @@ class PrepareTask:
     psf_25: bool = True                    # 30/60 fps werden immer an 29,97/59,94 angepasst (v1.25, keine Wahl)
     # 3D
     total_kbps: int = 25000
+    # Ultra HD Blu-ray (UHD-Plan, Phase 3): Auflösung, Datenrate (Stufe), Genau/Schnell, HDR10-Angaben
+    uhd_resolution: str = uhd.RES_2160
+    uhd_bitrate: int = uhd.DEFAULT_BITRATE[uhd.RES_2160]
+    uhd_mode: str = uhd.MODE_EXACT
+    uhd_hdr: Optional[dict] = None         # HdrMeta als dict (aus der Datei oder eingegeben)
+    uhd_hdr_from_file: bool = False
     # Ton
     audio_track: int = 0
     audio_format: str = ""
@@ -74,7 +82,26 @@ class PrepareTask:
 
     @property
     def is_video(self) -> bool:
-        return self.kind in (KIND_2D, KIND_3D)
+        return self.kind in (KIND_2D, KIND_3D, KIND_UHD)
+
+    @property
+    def dynamic_range(self) -> Optional[str]:
+        """Dynamikbereich der Quelle für UHD ("sdr709" | "sdr2020" | "hdr10") oder None."""
+        return uhd.detect_range(self.video) if self.video is not None else None
+
+    def hdr_meta(self) -> Optional[uhd.HdrMeta]:
+        if not self.uhd_hdr:
+            return None
+        d = self.uhd_hdr
+        return uhd.HdrMeta(green=tuple(d["green"]), blue=tuple(d["blue"]), red=tuple(d["red"]),
+                           white=tuple(d["white"]), max_luminance=int(d["max_luminance"]),
+                           min_luminance=int(d["min_luminance"]), max_cll=int(d["max_cll"]),
+                           max_fall=int(d["max_fall"]))
+
+    def needs_hdr_meta(self) -> bool:
+        """HDR10-Auftrag ohne (plausible) Grading-Angaben: startet erst, wenn sie eingetragen sind."""
+        meta = self.hdr_meta()
+        return self.kind == KIND_UHD and self.dynamic_range == uhd.HDR10 and (meta is None or not meta.plausible())
 
     @property
     def editable(self) -> bool:
@@ -97,8 +124,9 @@ def default_out_dir(source: str, common_dir: Optional[str] = None) -> str:
     return common_dir or os.path.join(os.path.dirname(source), OUT_DIR_NAME)
 
 
-def create_task(path: str, common_dir: Optional[str] = None) -> PrepareTask:
-    """Liest die Quelle und belegt den Auftrag vor (2D/3D aus der Auflösung, 720p/1080 aus der Bildrate).
+def create_task(path: str, common_dir: Optional[str] = None, disc_type: str = DISC_BLURAY) -> PrepareTask:
+    """Liest die Quelle und belegt den Auftrag vor (2D/3D aus der Auflösung, 720p/1080 aus der Bildrate; auf einer
+    Ultra HD Blu-ray jedes Video als UHD-Auftrag, 2160p bei 4K-Quellen).
     SourceRejected, wenn die Quelle nicht Blu-ray-tauglich ist; ValueError, wenn sie weder Bild noch Ton hat;
     jobs.ProbeError, wenn ffprobe die Datei nicht lesen kann; OSError, wenn ffprobe nicht startet."""
     # Wie run_task: das mitgelieferte ffprobe, nicht das aus dem PATH (v1.27.4). Bis dahin nahm das Hinzufügen im
@@ -118,20 +146,72 @@ def create_task(path: str, common_dir: Optional[str] = None) -> PrepareTask:
         task.audio_format = jobs.audio_track_options(task.track())[0]
         return task
     task.video = video
+    if disc_type == DISC_UHD:
+        task.kind = KIND_UHD
+        problems = _prepare_uhd(task)
+        if problems:
+            raise SourceRejected(problems)
+        return task
     task.layout = jobs.stereo_layout(video.width, video.height)
     task.kind = KIND_3D if task.layout else KIND_2D
     problems = jobs.source_problems(video, task.kind)
     if problems:
+        if task.kind == KIND_2D and not _uhd_problems(task):
+            problems.append(("uhd_possible", {}))      # ginge als Ultra HD Blu-ray (Disc-Typ im Start-Knoten)
         raise SourceRejected(problems)
     task.target_720p = bool(jobs.forced_720p(video.fps_str))
     return task
 
 
-def set_kind(task: PrepareTask, kind: str) -> list:
-    """2D/3D umstellen (z. B. ein echtes 2D-Panorama in 3840 × 1080). Gibt die Probleme der neuen Art zurück und
-    stellt nur um, wenn es keine gibt."""
-    if not task.is_video or kind not in (KIND_2D, KIND_3D):
+def _uhd_problems(task: PrepareTask) -> list:
+    """Probleme der Quelle für UHD; fehlende HDR10-Angaben zählen nicht (die werden im Inspektor eingetragen)."""
+    resolution = uhd.RES_2160 if (task.video.width, task.video.height) == uhd.SIZES[uhd.RES_2160] else uhd.RES_1080
+    return [p for p in uhd.source_problems(task.video, resolution, hdr=task.hdr_meta())
+            if p[0] != "uhd_hdr_meta"]
+
+
+def _prepare_uhd(task: PrepareTask) -> list:
+    """Vorbelegung eines UHD-Auftrags: 2160p bei 4K-Quellen, sonst 1080p; HDR10-Angaben aus der Datei."""
+    v = task.video
+    task.uhd_resolution = uhd.RES_2160 if (v.width, v.height) == uhd.SIZES[uhd.RES_2160] else uhd.RES_1080
+    task.uhd_bitrate = uhd.DEFAULT_BITRATE[task.uhd_resolution]
+    if uhd.detect_range(v) == uhd.HDR10:
+        meta = uhd.probe_hdr_meta(v.path)
+        if meta is not None:
+            task.uhd_hdr = hdr_to_dict(meta)
+            task.uhd_hdr_from_file = True
+    return _uhd_problems(task)
+
+
+def hdr_to_dict(meta: uhd.HdrMeta) -> dict:
+    return {"green": list(meta.green), "blue": list(meta.blue), "red": list(meta.red), "white": list(meta.white),
+            "max_luminance": meta.max_luminance, "min_luminance": meta.min_luminance, "max_cll": meta.max_cll,
+            "max_fall": meta.max_fall}
+
+
+def set_uhd_resolution(task: PrepareTask, resolution: str) -> list:
+    """2160p/1080p umstellen; die Datenrate wird zur Vorgabe der neuen Auflösung. Gibt Probleme zurück."""
+    if task.kind != KIND_UHD or resolution not in uhd.BITRATES:
         return []
+    problems = [p for p in uhd.source_problems(task.video, resolution, hdr=task.hdr_meta()) if p[0] != "uhd_hdr_meta"]
+    if not problems and resolution != task.uhd_resolution:
+        task.uhd_resolution = resolution
+        task.uhd_bitrate = uhd.DEFAULT_BITRATE[resolution]
+    return problems
+
+
+def set_kind(task: PrepareTask, kind: str) -> list:
+    """2D/3D umstellen (z. B. ein echtes 2D-Panorama in 3840 × 1080), oder zwischen Blu-ray und UHD, wenn der
+    Disc-Typ gewechselt hat. Gibt die Probleme der neuen Art zurück und stellt nur um, wenn es keine gibt."""
+    if not task.is_video or kind not in (KIND_2D, KIND_3D, KIND_UHD):
+        return []
+    if kind == KIND_UHD:
+        problems = _uhd_problems(task)
+        if not problems and task.kind != KIND_UHD:
+            task.kind = KIND_UHD
+            _prepare_uhd(task)
+        return problems
+    task.layout = jobs.stereo_layout(task.video.width, task.video.height)
     problems = jobs.source_problems(task.video, kind)
     if not problems:
         task.kind = kind
@@ -151,6 +231,11 @@ def build_job(task: PrepareTask, out_dir: Optional[str] = None, adaptive: bool =
                                  out_dir=out_dir)
     if task.kind == KIND_3D:
         return jobs.build_3d_job(task.video, task.total_kbps, out_dir=out_dir, adaptive=adaptive)
+    if task.kind == KIND_UHD:
+        if task.needs_hdr_meta():
+            raise ValueError(jobs.PROBLEM_TEXT["uhd_hdr_meta"])
+        return uhd.build_uhd_job(task.video, task.uhd_resolution, task.uhd_bitrate, task.uhd_mode,
+                                 hdr=task.hdr_meta(), out_dir=out_dir)
     # Spur angeben bei Videos, mehreren Spuren und 1:1 (wie BD3DEnc); eine einfache WAV heißt danach <Name>.<Endung>
     audio = task.audio
     needs_track = audio.has_video or len(audio.tracks) > 1 or "1:1" in task.audio_format
@@ -199,6 +284,8 @@ def estimated_size(task: PrepareTask) -> int:
         return int(seconds * task.bitrate_2d * 125_000)
     if task.kind == KIND_3D:
         return int(seconds * task.total_kbps * 125)
+    if task.kind == KIND_UHD:
+        return uhd.estimated_size(seconds, task.uhd_bitrate, task.uhd_mode)
     track = task.track()
     channels = track.channels if track else 2
     if "LPCM" in task.audio_format:

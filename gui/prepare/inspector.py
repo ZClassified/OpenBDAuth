@@ -20,11 +20,11 @@ from typing import Callable, List, Optional
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QPushButton, QFrame,
-    QProgressBar, QFileDialog,
+    QProgressBar, QFileDialog, QSpinBox, QDoubleSpinBox,
 )
 
 from core.translations import tr
-from modules.prepare import jobs, tasks
+from modules.prepare import jobs, tasks, uhd
 from gui.studio.widgets import Section, SegmentedSwitch, ElidedLabel, hint_label, fill_combo
 
 INFO_STYLE = "color: #A1A1AA;"
@@ -57,6 +57,28 @@ def _row(caption: QLabel, field: QWidget) -> QWidget:
 def _common(values: list):
     """Der gemeinsame Wert oder MIXED."""
     return values[0] if values and all(v == values[0] for v in values) else MIXED
+
+
+# Primärfarben des Mastering-Displays (Einheiten wie x265: CIE xy × 50 000), Weißpunkt D65
+HDR_PRIMARIES = {
+    "p3d65": {"green": (13250, 34500), "blue": (7500, 3000), "red": (34000, 16000), "white": (15635, 16450)},
+    "bt2020": {"green": (8500, 39850), "blue": (6550, 2300), "red": (35400, 14600), "white": (15635, 16450)},
+}
+# Eingabefelder: (kleinster Wert, größter Wert, Nachkommastellen, Schritt)
+HDR_SPINS = {"max_luminance": (100, 10000, 0, 100), "min_luminance": (0.0001, 1.0, 4, 0.0001),
+             "max_cll": (0, 10000, 0, 50), "max_fall": (0, 10000, 0, 50)}
+
+
+def _format_hours(seconds: float) -> str:
+    minutes = int(seconds // 60)
+    return f"{minutes // 60} h {minutes % 60:02d} min" if minutes >= 60 else f"{minutes} min"
+
+
+def _lum(value: int, lang: str) -> str:
+    """Helligkeit aus 0,0001 cd/m² lesbar: 1000 bzw. 0,0001 (Komma auf Deutsch)."""
+    number = value / 10000
+    text = f"{number:g}" if number >= 1 else f"{number:.4f}".rstrip("0")
+    return text.replace(".", ",") if lang == "de" else text
 
 
 def audio_option_label(option: str) -> str:
@@ -156,9 +178,32 @@ class PrepareInspector(QScrollArea):
         self.lbl_ntsc_hint = hint_label()
         # Ton im Video wird bewusst nicht übernommen (v1.29.1): Ton gehört als eigene Datei in guter Qualität dazu
         self.lbl_no_audio = hint_label()
-        for w in (self.row_kind, _row(self.lbl_bitrate, self.combo_bitrate), self.row_resolution, self.row_25p,
-                  self.lbl_25p_hint, self.row_conform, self.lbl_conform_hint, self.lbl_conform_tip,
-                  self.lbl_ntsc_hint, self.lbl_no_audio):
+        # Ultra HD Blu-ray (UHD-Plan): Auflösung, Datenrate mit „passt bis …“, Genau/Schnell, Dynamikbereich, HDR10
+        self.lbl_uhd_res = QLabel()
+        self.switch_uhd_res = SegmentedSwitch([uhd.RES_2160, uhd.RES_1080])
+        self.switch_uhd_res.chosen.connect(self._on_uhd_resolution)
+        self.row_uhd_res = _row(self.lbl_uhd_res, self.switch_uhd_res)
+        self.lbl_fit = hint_label()
+        self.lbl_uhd_mode = QLabel()
+        self.switch_uhd_mode = SegmentedSwitch([uhd.MODE_EXACT, uhd.MODE_FAST])
+        self.switch_uhd_mode.chosen.connect(lambda value: self._set("uhd_mode", value))
+        self.row_uhd_mode = _row(self.lbl_uhd_mode, self.switch_uhd_mode)
+        self.lbl_uhd_mode_hint = hint_label()
+        self.lbl_range_caption = QLabel()
+        self.lbl_range = QLabel()
+        self.lbl_range.setWordWrap(True)
+        self.lbl_range.setStyleSheet(INFO_STYLE)
+        self.row_range = _row(self.lbl_range_caption, self.lbl_range)
+        self.box_hdr = self._build_hdr_box()
+        self.lbl_disc_mismatch = hint_label()
+        self.lbl_disc_mismatch.setStyleSheet(NONSTANDARD_STYLE)
+        self.btn_fit_disc = QPushButton()
+        self.btn_fit_disc.clicked.connect(self._fit_disc)
+        self.row_bitrate = _row(self.lbl_bitrate, self.combo_bitrate)
+        for w in (self.lbl_disc_mismatch, self.btn_fit_disc, self.row_kind, self.row_uhd_res, self.row_bitrate,
+                  self.lbl_fit, self.row_uhd_mode, self.lbl_uhd_mode_hint, self.row_range, self.box_hdr,
+                  self.row_resolution, self.row_25p, self.lbl_25p_hint, self.row_conform, self.lbl_conform_hint,
+                  self.lbl_conform_tip, self.lbl_ntsc_hint, self.lbl_no_audio):
             self.sec_video.layout_.addWidget(w)
         layout.addWidget(self.sec_video)
 
@@ -219,8 +264,39 @@ class PrepareInspector(QScrollArea):
         self.sec_result.layout_.addWidget(self.btn_take, alignment=Qt.AlignLeft)
         layout.addWidget(self.sec_result)
 
+        # „passt bis …“: freier Platz der Disc für diesen Auftrag in Bytes (setzt die Seite Vorbereiten)
+        self.free_bytes_for: Callable[[tasks.PrepareTask], Optional[int]] = lambda task: None
+        self.disc_size_name: Callable[[], str] = lambda: ""
         self.retranslate()
         self.show_tasks([])
+
+    def _build_hdr_box(self) -> QWidget:
+        """Eingabe der HDR10-Angaben aus dem Grading, wenn die Datei keine mitbringt (Pflicht)."""
+        box = QWidget()
+        form = QVBoxLayout(box)
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setSpacing(6)
+        self.lbl_hdr_needed = hint_label()
+        self.lbl_hdr_needed.setStyleSheet(NONSTANDARD_STYLE)
+        form.addWidget(self.lbl_hdr_needed)
+        self.lbl_hdr_primaries = QLabel()
+        self.combo_hdr_primaries = QComboBox()
+        for key in HDR_PRIMARIES:
+            self.combo_hdr_primaries.addItem("", key)
+        self.combo_hdr_primaries.activated.connect(lambda _i: self._commit_hdr())
+        form.addWidget(_row(self.lbl_hdr_primaries, self.combo_hdr_primaries))
+        self.spin_hdr = {}
+        for key, (low, high, decimals, step) in HDR_SPINS.items():
+            label = QLabel()
+            spin = QDoubleSpinBox() if decimals else QSpinBox()
+            if decimals:
+                spin.setDecimals(decimals)
+            spin.setRange(low, high)
+            spin.setSingleStep(step)
+            spin.editingFinished.connect(self._commit_hdr)
+            self.spin_hdr[key] = (label, spin)
+            form.addWidget(_row(label, spin))
+        return box
 
     def t(self, key: str, **kwargs) -> str:
         text = tr(key, self._lang())
@@ -299,6 +375,20 @@ class PrepareInspector(QScrollArea):
     def _refresh_video(self, sel):
         single = self.task
         kind = sel[0].kind
+        self._refresh_disc_match(sel)
+        is_uhd = kind == tasks.KIND_UHD
+        for w in (self.row_uhd_res, self.lbl_fit, self.row_uhd_mode, self.lbl_uhd_mode_hint, self.row_range):
+            w.setVisible(is_uhd)
+        self.box_hdr.setVisible(False)
+        if is_uhd:
+            self.row_kind.setVisible(False)
+            for w in (self.row_resolution, self.row_25p, self.lbl_25p_hint, self.row_conform, self.lbl_conform_hint,
+                      self.lbl_conform_tip, self.lbl_ntsc_hint):
+                w.setVisible(False)
+            self._refresh_uhd(sel)
+            self.lbl_no_audio.setVisible(any(t.video.has_audio for t in sel))
+            self.lbl_no_audio.setText(self.t("prep_hint_no_audio"))
+            return
         self.row_kind.setVisible(single is not None)
         if single is not None:
             self.switch_kind.set_value(kind)
@@ -360,6 +450,130 @@ class PrepareInspector(QScrollArea):
         self.lbl_ntsc_hint.setText(self.t("prep_hint_ntsc_psf"))
         self.lbl_no_audio.setVisible(any(t.video.has_audio for t in sel))
         self.lbl_no_audio.setText(self.t("prep_hint_no_audio"))
+
+    def _refresh_disc_match(self, sel):
+        """Hinweis, wenn Auftrag und Disc-Typ nicht zusammenpassen (Disc-Typ nach dem Hinzufügen umgestellt)."""
+        disc_uhd = self.controller.project.settings.is_uhd
+        task_uhd = sel[0].kind == tasks.KIND_UHD
+        mismatch = disc_uhd != task_uhd
+        self.lbl_disc_mismatch.setVisible(mismatch)
+        self.btn_fit_disc.setVisible(mismatch)
+        if mismatch:
+            self.lbl_disc_mismatch.setText(self.t("prep_uhd_task_on_bluray" if task_uhd else "prep_bluray_task_on_uhd"))
+            self.btn_fit_disc.setText(self.t("prep_fit_disc"))
+
+    def _fit_text(self, task, bitrate: int) -> str:
+        free = self.free_bytes_for(task)
+        if free is None:
+            return ""
+        seconds = free / (uhd.estimated_size(1, bitrate, task.uhd_mode) or 1)
+        if seconds < 60:
+            return self.t("prep_fits_none", disc=self.disc_size_name())
+        return self.t("prep_fits_until", time=_format_hours(seconds), disc=self.disc_size_name())
+
+    def _refresh_uhd(self, sel):
+        single = self.task
+        resolutions = {t.uhd_resolution for t in sel}
+        resolution = next(iter(resolutions)) if len(resolutions) == 1 else None
+        self.row_uhd_res.setVisible(resolution is not None)
+        if resolution is not None:
+            self.switch_uhd_res.set_value(resolution)
+            only_1080 = any((t.video.width, t.video.height) != uhd.SIZES[uhd.RES_2160] for t in sel)
+            self.switch_uhd_res.buttons[uhd.RES_2160].setEnabled(not only_1080)
+        # Datenrate: Stufen der Auflösung, jede mit „passt bis …“ (bei Einzelauswahl)
+        rates = uhd.BITRATES.get(resolution, ())
+        value = _common([t.uhd_bitrate for t in sel])
+        entries = []
+        for rate in rates:
+            fit = self._fit_text(single, rate) if single is not None else ""
+            entries.append((rate, self.t("prep_bitrate_2d", n=rate) + (f" – {fit}" if fit else "")))
+        self.row_bitrate.setVisible(bool(rates))
+        fill_combo(self.combo_bitrate, ([(MIXED, self.t("prep_mixed"))] if value == MIXED else []) + entries, value)
+        # passt der Film mit dieser Stufe nicht: der Ausweg (kleinere Stufe oder größere Disc)
+        self.lbl_fit.setVisible(False)
+        if single is not None and single.duration > 0:
+            free = self.free_bytes_for(single)
+            if free is not None and uhd.estimated_size(single.duration, single.uhd_bitrate, single.uhd_mode) > free:
+                fitting = [r for r in rates if uhd.estimated_size(single.duration, r, single.uhd_mode) <= free]
+                text = self.t("prep_fit_too_big", disc=self.disc_size_name())
+                if fitting:
+                    text += " " + self.t("prep_fit_with", n=max(fitting))
+                self.lbl_fit.setText(text)
+                self.lbl_fit.setStyleSheet(NONSTANDARD_STYLE)
+                self.lbl_fit.setVisible(True)
+        mode = _common([t.uhd_mode for t in sel])
+        if mode == MIXED:
+            self.switch_uhd_mode.clear()
+            self.lbl_uhd_mode_hint.setText("")
+        else:
+            self.switch_uhd_mode.set_value(mode)
+            self.lbl_uhd_mode_hint.setText(self.t(f"prep_uhd_mode_{mode}_hint"))
+        # Dynamikbereich der Quelle und HDR10-Angaben
+        ranges = {t.dynamic_range for t in sel}
+        dyn = next(iter(ranges)) if len(ranges) == 1 else None
+        if dyn is None:
+            self.lbl_range.setText(self.t("prep_mixed"))
+            return
+        text = self.t(f"uhd_range_{dyn}")
+        if dyn == uhd.HDR10 and single is not None:
+            meta = single.hdr_meta()
+            if meta is not None and meta.plausible():
+                text += "\n" + self.t("prep_hdr_values", min=_lum(meta.min_luminance, self._lang()),
+                                      max=_lum(meta.max_luminance, self._lang()),
+                                      cll=meta.max_cll, fall=meta.max_fall)
+                text += " " + self.t("prep_hdr_from_file" if single.uhd_hdr_from_file else "prep_hdr_entered")
+            self.box_hdr.setVisible(not single.uhd_hdr_from_file)
+            self._fill_hdr_box(single)
+        self.lbl_range.setText(text)
+
+    def _fill_hdr_box(self, task):
+        meta = task.hdr_meta()
+        self.lbl_hdr_needed.setVisible(task.needs_hdr_meta())
+        self.lbl_hdr_needed.setText(self.t("prep_hdr_needed"))
+        primaries = next((k for k, v in HDR_PRIMARIES.items() if meta is not None and
+                          (v["green"], v["blue"], v["red"], v["white"]) ==
+                          (meta.green, meta.blue, meta.red, meta.white)), "p3d65")
+        index = self.combo_hdr_primaries.findData(primaries)
+        if index >= 0:
+            self.combo_hdr_primaries.setCurrentIndex(index)
+        values = {"max_luminance": meta.max_luminance / 10000 if meta else 1000,
+                  "min_luminance": meta.min_luminance / 10000 if meta else 0.0001,
+                  "max_cll": meta.max_cll if meta else 0, "max_fall": meta.max_fall if meta else 0}
+        for key, (_label, spin) in self.spin_hdr.items():
+            if not spin.hasFocus():
+                spin.setValue(values[key])
+
+    def _commit_hdr(self):
+        task = self.task
+        if task is None or not task.editable:
+            return
+        prim = HDR_PRIMARIES[self.combo_hdr_primaries.currentData()]
+        spins = {key: spin.value() for key, (_label, spin) in self.spin_hdr.items()}
+        meta = uhd.HdrMeta(green=prim["green"], blue=prim["blue"], red=prim["red"], white=prim["white"],
+                           max_luminance=int(round(spins["max_luminance"] * 10000)),
+                           min_luminance=int(round(spins["min_luminance"] * 10000)),
+                           max_cll=int(spins["max_cll"]), max_fall=int(spins["max_fall"]))
+        self._apply(lambda t: (setattr(t, "uhd_hdr", tasks.hdr_to_dict(meta)), setattr(t, "uhd_hdr_from_file", False)))
+
+    def _on_uhd_resolution(self, resolution: str):
+        problems = []
+        for task in self._editable():
+            problems += tasks.set_uhd_resolution(task, resolution)
+        if problems:
+            self.status.emit(" ".join(self.t(f"prep_problem_{code}", **details) for code, details in problems))
+        self._apply(lambda t: None)
+
+    def _fit_disc(self):
+        """Aufträge an den Disc-Typ anpassen (Blu-ray ↔ Ultra HD), soweit die Quelle es erlaubt."""
+        kind = tasks.KIND_UHD if self.controller.project.settings.is_uhd else None
+        problems = []
+        for task in self._editable():
+            target = kind or (tasks.KIND_3D if jobs.stereo_layout(task.video.width, task.video.height)
+                              else tasks.KIND_2D)
+            problems += tasks.set_kind(task, target)
+        if problems:
+            self.status.emit(" ".join(self.t(f"prep_problem_{code}", **details) for code, details in problems))
+        self._apply(lambda t: None)
 
     def _refresh_audio(self, sel):
         single = self.task
@@ -468,7 +682,8 @@ class PrepareInspector(QScrollArea):
         if value == MIXED:
             return
         kind = self.selection[0].kind if self.selection else None
-        self._set("total_kbps" if kind == tasks.KIND_3D else "bitrate_2d", value)
+        field = {tasks.KIND_3D: "total_kbps", tasks.KIND_UHD: "uhd_bitrate"}.get(kind, "bitrate_2d")
+        self._set(field, value)
 
     def _on_track(self, _index: int):
         task = self.task
@@ -518,6 +733,18 @@ class PrepareInspector(QScrollArea):
         self.lbl_25p.setText(self.t("prep_25p"))
         self.lbl_conform.setText(self.t("prep_frame_rate"))
         self.switch_25p.set_texts({"psf": self.t("prep_25p_i"), "p": self.t("prep_25p_p")})
+        self.lbl_uhd_res.setText(self.t("prep_resolution"))
+        self.switch_uhd_res.set_texts({uhd.RES_2160: "2160p", uhd.RES_1080: "1080p"})
+        self.lbl_uhd_mode.setText(self.t("prep_uhd_mode"))
+        self.switch_uhd_mode.set_texts({uhd.MODE_EXACT: self.t("prep_uhd_mode_exact"),
+                                        uhd.MODE_FAST: self.t("prep_uhd_mode_fast")})
+        self.lbl_range_caption.setText(self.t("prep_range"))
+        self.lbl_hdr_primaries.setText(self.t("prep_hdr_primaries"))
+        for i in range(self.combo_hdr_primaries.count()):
+            self.combo_hdr_primaries.setItemText(i, self.t(f"prep_hdr_primaries_{self.combo_hdr_primaries.itemData(i)}"))
+        for key, (label, spin) in self.spin_hdr.items():
+            label.setText(self.t(f"prep_hdr_{key}"))
+            spin.setSuffix(" cd/m²")
         self.lbl_track.setText(self.t("prep_track"))
         self.lbl_format.setText(self.t("prep_format"))
         self.lbl_out_caption.setText(self.t("prep_out_dir"))

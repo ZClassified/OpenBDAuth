@@ -461,7 +461,7 @@ class FilmPage(_Page):
 
         details = film.video_details or {}
         if film.video_base:
-            mode = "3D" if film.is_3d else "2D"
+            mode = "3D" if film.is_3d else ("Ultra HD" if film.is_hevc else "2D")
             w, h = details.get("width", 0), details.get("height", 0)
             size = f"{w}×{h} · " if w and h else ""
             self.lbl_info.setText(f"{size}{film.fps:.3f} fps · {mode}")

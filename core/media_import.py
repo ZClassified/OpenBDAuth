@@ -21,7 +21,7 @@ KIND_AUDIO = "audio"
 KIND_SUBTITLE = "subtitle"
 KIND_CHAPTERS = "chapters"
 
-VIDEO_EXTS = {".264", ".h264", ".avc", ".m2ts"}
+VIDEO_EXTS = {".264", ".h264", ".avc", ".m2ts", ".hevc", ".h265", ".265"}   # HEVC: Ultra HD Blu-ray
 MVC_EXTS = {".mvc"}
 AUDIO_EXTS = {".ac3", ".eac3", ".ec3", ".dts", ".dtshd", ".truehd", ".thd", ".wav", ".mp4"}
 SUBTITLE_EXTS = {".srt", ".sup"}

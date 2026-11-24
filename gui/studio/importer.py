@@ -230,5 +230,13 @@ class FilmImporter(QObject):
 
     @staticmethod
     def _probe_video(path: str, is_3d: bool) -> dict:
+        from core.disc_model import HEVC_EXTENSIONS
+        if path.lower().endswith(HEVC_EXTENSIONS):
+            # Ultra HD Blu-ray: Kenndaten aus dem Strom selbst (die Prüfung der Regeln macht hevctools)
+            from hevctools.stream import quick_info
+            info = quick_info(path) or {}
+            if not info.get("fps"):
+                info.pop("fps", None)
+            return info
         from modules.video_tools import VideoTools
         return VideoTools().probe_video_details(path, is_3d_hint=is_3d)

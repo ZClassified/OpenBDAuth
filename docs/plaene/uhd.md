@@ -250,6 +250,16 @@ Datei (erstes Bild) oder angegeben, Prüfung jedes Ergebnisses mit `hevctools`, 
   weil die Kennzeichnung direkt in `-x265-params` steht.
 - Ein roher `.hevc`-Strom als Quelle hat keine verlässliche Bildrate (ffprobe rät); das ist Weg B (nur prüfen).
 
+**Stand (2026-11-24, `feature/uhd`): Oberfläche umgesetzt.** Auf einer UHD-Disc wird jedes Video ein UHD-Auftrag
+(2160p bei 4K-Quellen, sonst 1080p). Inspektor: Auflösung, Datenrate mit „passt bis ca. … auf BD-xx“ (Platz abzüglich
+Reserve 4 % und allem anderen auf der Disc) und Ausweg, wenn es nicht passt; Genau/Schnell; Dynamik mit den
+HDR10-Werten; Eingabe der Grading-Werte (Mastering-Display DCI-P3 D65 oder BT.2020, Helligkeit, MaxCLL/MaxFALL),
+wenn die Datei keine mitbringt – ohne sie startet der Auftrag nicht. Wurde der Disc-Typ nach dem Hinzufügen
+umgestellt: Hinweis und „An den Disc-Typ anpassen“. Auf einer Blu-ray nennt die Ablehnung einer 4K-HDR-Quelle den
+Weg über den Disc-Typ. `.hevc` lässt sich in Film-Knoten übernehmen, Kenndaten und Bildrate aus dem SPS
+(`hevctools.stream.quick_info`). Noch offen: Weg B (fertiger HEVC-Strom direkt in den Film-Knoten) mit vollständiger
+Prüfung im Hintergrund, wie beim 3D-Paar. Tests: `tests/test_prepare_uhd_page.py`.
+
 ## Phase 4 – Disc-Struktur Version 3
 
 Alle selbst geschriebenen Dateien bekommen eine UHD-Variante. Die Bluray-Variante bleibt unverändert (Tests sichern

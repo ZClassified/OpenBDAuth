@@ -134,3 +134,24 @@ class StreamParser:
 
     def first_sps(self):
         return next(iter(self.sps.values()), None)
+
+
+def quick_info(path, max_nals=200):
+    """
+    Kenndaten aus dem ersten SPS, ohne den ganzen Strom zu lesen (für den Import in einen Film-Knoten): Größe,
+    Bildrate aus der VUI (exakt, anders als ffprobe bei rohen Strömen), Bittiefe, Dynamikbereich. None ohne SPS.
+    """
+    from .check import detect_range
+    from .sps import frame_rate
+    for count, nal in enumerate(iter_nal_units(path)):
+        if nal.type == SPS:
+            try:
+                sps = parse_sps(nal.payload_ebsp())
+            except (BitstreamError, IndexError, ValueError):
+                return None
+            return {"codec_name": "hevc", "width": sps["width"], "height": sps["height"], "fps": frame_rate(sps),
+                    "bit_depth": sps["bit_depth_luma"], "dynamic_range": detect_range(sps), "is_interlaced": False,
+                    "warnings": []}
+        if count >= max_nals:
+            break
+    return None

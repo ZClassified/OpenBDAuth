@@ -47,6 +47,7 @@ QUEUE_FILE = "prepare_queue.json"
 OUT_BESIDE, OUT_COMMON = "beside", "common"
 GAUGE_QSS = "QProgressBar::chunk {{ background-color: {color}; border-radius: 4px; }}"
 GB = 1e9                 # dezimal wie BD-25/BD-50 (v1.30.4; vorher 1024³ – eine leere BD-25 hieß „23,3 GB“)
+DISC_RESERVE = 0.04       # „passt bis …“ (UHD): Dateisystem, Menüs, Puffer (Annahme)
 
 
 def _size_text(n: float) -> str:
@@ -184,6 +185,8 @@ class PreparePage(QMainWindow):
         self.inspector.take_over.connect(self.take_over)
         self.inspector.create_film.connect(self.create_film_for)
         self.inspector.status.connect(self.status)
+        self.inspector.free_bytes_for = self.free_bytes_for
+        self.inspector.disc_size_name = lambda: DISC_SIZE_NAMES[self.controller.project.settings.disc_size_key()]
         self.log_view = QTextEdit()
         self.log_view.setObjectName("log_area")
         self.log_view.setReadOnly(True)
@@ -342,7 +345,7 @@ class PreparePage(QMainWindow):
         added, rejected = [], []
         for path in paths:
             try:
-                task = tasks.create_task(path, self.common_dir)
+                task = tasks.create_task(path, self.common_dir, self.controller.project.settings.disc_type)
             except tasks.SourceRejected as e:
                 reasons = "\n".join("• " + self.t(f"prep_problem_{code}", **details) for code, details in e.problems)
                 rejected.append(self.t("prep_rejected", file=os.path.basename(path)) + "\n" + reasons)
@@ -529,6 +532,14 @@ class PreparePage(QMainWindow):
         color = "#F87171" if share > 1.0 else "#FDE047" if share > 0.9 else "#FBBF24"
         self.gauge.setStyleSheet(GAUGE_QSS.format(color=color))
         self.lbl_gauge.setStyleSheet(f"color: {'#F87171' if share > 1.0 else '#D4D4D8'};")
+
+    def free_bytes_for(self, task) -> int:
+        """Platz der Disc für dieses Video: Größe abzüglich Reserve und allem anderen (Projekt, übrige Aufträge)."""
+        size = self.controller.project.settings.disc_size_key()
+        others = self.disc_bytes()
+        if task.status in (tasks.WAITING, tasks.RUNNING):
+            others -= tasks.estimated_size(task)
+        return int(DISC_SIZE_BYTES[size] * (1 - DISC_RESERVE)) - others
 
     def disc_bytes(self) -> int:
         """Geschätzter Platz auf der Disc: Dateien des offenen Projekts plus alles, was die Aufträge noch liefern
@@ -821,7 +832,7 @@ class PreparePage(QMainWindow):
             self.status.emit(self.t("prep_take_audio_needs_film"))
             return
         # Video zuerst: ein neuer Film-Knoten entsteht aus dem Video, Ton kommt danach dazu
-        outputs.sort(key=lambda p: 0 if p.lower().endswith((".264", ".mvc")) else 1)
+        outputs.sort(key=lambda p: 0 if p.lower().endswith((".264", ".mvc", ".hevc")) else 1)
         stack = self.controller.undo_stack
         stack.beginMacro(self.t("prep_take"))        # ein Klick = ein Schritt (Film anlegen + Dateien)
         try:
