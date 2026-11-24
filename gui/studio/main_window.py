@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 
 from core.constants import APP_NAME, APP_VERSION
 from core.translations import tr, set_ui_language, tr_file_filter, ui_language
-from core.disc_model import DiscProject, load_disc_project
+from core.disc_model import DiscProject, load_disc_project, START_NODE_ID, DISC_SIZE_NAMES, DEFAULT_DISC_SIZE
 from core.disc_edit import starter_project
 from gui.node_editor.controller import GraphController
 from gui.node_editor.scene import NodeScene
@@ -49,6 +49,7 @@ class StudioWindow(QMainWindow):
         # Sprache der Oberfläche (v1.27.0): Programm-Einstellung; in Tests (persist_layout aus) die des Projekts
         set_ui_language(load_app_language() if persist_layout else (project.settings.app_lang if project else "de"))
         self.controller = GraphController(project or starter_project(ui_language()), self)
+        self._adopt_legacy_disc_size(self.controller.project)
         self.importer = FilmImporter(self.controller, self._default_track_lang, self)
 
         # Zentral: Node-Ansicht; ab v1.22 daneben die Seite Vorbereiten
@@ -84,6 +85,7 @@ class StudioWindow(QMainWindow):
         self.statusBar().addPermanentWidget(self.lbl_prepare_progress)
         self.importer.needs_prepare.connect(self._offer_prepare)
         self.prepare_page.status.connect(self._status)
+        self.prepare_page.disc_settings_requested.connect(self.show_disc_settings)
         self.prepare_page.progress_text.connect(self.lbl_prepare_progress.setText)
         self.burn_page.status.connect(self._status)
         self.burn_page.progress_text.connect(self._on_burn_progress)
@@ -809,8 +811,25 @@ class StudioWindow(QMainWindow):
             return self.save_project()
         return answer == QMessageBox.Discard
 
+    def show_disc_settings(self):
+        """Seite Disc mit dem Start-Knoten im Inspektor (Disc-Name, Sprache, Disc-Größe)."""
+        self.page_actions[PAGE_DISC].trigger()
+        self.scene.select_node(START_NODE_ID)
+        self.scene.jump_to_node(START_NODE_ID)
+
+    def _adopt_legacy_disc_size(self, project: DiscProject):
+        """Projekte ohne Disc-Größe (vor v1.36, und neue Projekte) übernehmen die bisherige App-Einstellung aus
+        Vorbereiten – ohne Rückgängig-Schritt, das Projekt gilt danach nicht als geändert."""
+        if project.settings.disc_size:
+            return
+        size = ""
+        if self._persist_layout:
+            size = QSettings(SETTINGS_ORG, SETTINGS_APP).value("prepare/disc_size", "") or ""
+        project.settings.disc_size = size if size in DISC_SIZE_NAMES else DEFAULT_DISC_SIZE
+
     def set_project(self, project: DiscProject, filepath: Optional[str] = None):
         self.current_file = filepath
+        self._adopt_legacy_disc_size(project)
         self.controller.set_project(project)
         self.controller.undo_stack.setClean()
         self.scene.rebuild()

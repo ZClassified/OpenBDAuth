@@ -28,8 +28,6 @@ WAITING, RUNNING, DONE, FAILED, CANCELLED = "waiting", "running", "done", "faile
 BITRATES_2D = (25, 20, 15)                 # Mbit/s (Mittel), wie BD3DEnc
 BUDGETS_3D = (30000, 25000, 20000)         # kbit/s für beide Augen zusammen
 
-# Kapazität für den Füllstand (v1.23): BD-25/BD-50 in Bytes, wie auf der Hülle
-DISC_SIZES = {"bd25": 25_000_000_000, "bd50": 50_000_000_000}
 COPY_KBPS_GUESS = 1536                     # 1:1-Ton ohne bekannte Bitrate: wie DTS 5.1
 QUEUE_VERSION = 1
 

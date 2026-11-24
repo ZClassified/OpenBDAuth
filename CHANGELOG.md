@@ -5,6 +5,16 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.36.0] - 2026-11-24
+
+### Disc-Größe im Start-Knoten
+
+- **Einstellen im Start-Knoten:** Die Disc-Größe (BD-25, BD-50) steht im Inspektor des Start-Knotens neben Disc-Name, Titel im Player und Sprache der Disc. Sie gehört jetzt zum Projekt und wird mit ihm gespeichert; bisher war sie eine Einstellung des Programms und galt für alle Projekte.
+- **Vorbereiten zeigt sie nur an:** In der Kopfleiste steht die Größe mit dem Füllstand, „ändern“ springt zur Seite Disc und wählt den Start-Knoten.
+- **Ältere Projekte** ohne Disc-Größe übernehmen beim Öffnen einmal die bisherige Einstellung aus Vorbereiten, ohne als geändert zu gelten. Neue Projekte ebenso.
+- Vorbereitung für Ultra HD Blu-ray (`docs/plaene/uhd.md`): Disc-Typ und Disc-Größe sollen an einer Stelle stehen.
+- **Tests:** Speichern und Laden, Umstellen im Start-Knoten mit Rückgängig, Anzeige in Vorbereiten, Sprung zum Start-Knoten, Übernahme bei älteren Projekten.
+
 ## [1.35.0] - 2026-11-24
 
 ### Menüs: Buttons schneller anlegen, Start-Button und Farben beim Button

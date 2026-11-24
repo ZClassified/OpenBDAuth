@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 
 from core import menu_design, menu_templates, disc_edit, node_frames
 from core.translations import tr, tr_file_filter, ui_language
-from core.disc_model import START_NODE_ID
+from core.disc_model import START_NODE_ID, DISC_SIZE_NAMES
 from core.disc_edit import TRACK_AUDIO, TRACK_SUBTITLE, tracks
 from core.disc_rules import button_label, starts_3d_film
 from core.disc_model import (
@@ -131,9 +131,16 @@ class StartPage(_Page):
         self.combo_lang.addItem("Deutsch", "de")
         self.combo_lang.addItem("English", "en")
         self.combo_lang.currentIndexChanged.connect(self._on_lang)
+        # Disc-Größe (v1.36): gehört zum Projekt; Vorbereiten zeigt sie mit Füllstand an
+        self.lbl_size = QLabel()
+        self.combo_size = QComboBox()
+        for key, name in DISC_SIZE_NAMES.items():
+            self.combo_size.addItem(name, key)
+        self.combo_size.activated.connect(
+            lambda _i: self.controller.set_settings("Disc-Größe ändern", disc_size=self.combo_size.currentData()))
         self.lbl_target = hint_label()
         for w in (self.lbl_name, self.edit_name, self.lbl_title, self.edit_title, self.lbl_lang, self.combo_lang,
-                  self.lbl_target):
+                  self.lbl_size, self.combo_size, self.lbl_target):
             self.card.layout_.addWidget(w)
         layout.addWidget(self.card)
         layout.addStretch(1)
@@ -166,6 +173,7 @@ class StartPage(_Page):
             self.combo_lang.blockSignals(True)
             self.combo_lang.setCurrentIndex(idx)
             self.combo_lang.blockSignals(False)
+        _fill_combo(self.combo_size, [(k, n) for k, n in DISC_SIZE_NAMES.items()], s.disc_size_key())
         target = self.controller.project.node(self.controller.project.start_target)
         self.lbl_target.setText(self.t("studio_start_target", name=target.name) if target
                                 else self.t("studio_start_none"))
@@ -177,6 +185,8 @@ class StartPage(_Page):
         self.lbl_title.setText(self.t("studio_disc_title"))
         self.edit_title.setToolTip(self.t("studio_disc_title_tip"))
         self.lbl_lang.setText(self.t("studio_ui_lang"))
+        self.lbl_size.setText(self.t("studio_disc_size"))
+        self.combo_size.setToolTip(self.t("studio_disc_size_tip"))
 
 
 # -------------------------------------------------------------------------

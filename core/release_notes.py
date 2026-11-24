@@ -48,6 +48,19 @@ def date_text(release: Release, lang: str) -> str:
 
 
 RELEASES: Tuple[Release, ...] = (
+    Release("1.36.0", "2026-11-24",
+            de=Notes("Disc-Größe gehört zum Projekt", (
+                "Die Disc-Größe (BD-25 oder BD-50) stellst du jetzt im Start-Knoten der Disc ein, neben Name, Titel "
+                "und Sprache. Sie wird mit dem Projekt gespeichert.",
+                "Vorbereiten zeigt die Größe mit dem Füllstand an; „ändern“ springt zum Start-Knoten. Ältere "
+                "Projekte übernehmen beim Öffnen die bisherige Einstellung.",
+            )),
+            en=Notes("Disc size belongs to the project", (
+                "You now set the disc size (BD-25 or BD-50) in the disc's start node, next to name, title and "
+                "language. It is saved with the project.",
+                "Prepare shows the size with the fill level; “change” jumps to the start node. Older projects take "
+                "over the previous setting when opened.",
+            ))),
     Release("1.35.0", "2026-11-24",
             de=Notes("Menüs schneller bauen", (
                 "„＋ Button“ im Menü-Knoten bietet fertige Buttons an: Film starten, Ton, Untertitel und Kapitel – "

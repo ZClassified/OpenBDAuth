@@ -195,6 +195,11 @@ class MenuNode:
 # Projekt
 # -------------------------------------------------------------------------
 
+DISC_SIZE_BYTES = {"bd25": 25_000_000_000, "bd50": 50_000_000_000}   # dezimal wie die Rohlinge
+DISC_SIZE_NAMES = {"bd25": "BD-25", "bd50": "BD-50"}
+DEFAULT_DISC_SIZE = "bd25"
+
+
 @dataclass
 class DiscSettings:
     app_lang: str = "de"
@@ -207,6 +212,13 @@ class DiscSettings:
     menu_no_buttons_test: bool = False  # Hardware-Diagnose: Menü ohne Buttons
     menu_resume: bool = True            # Hardware-Diagnose (11.2.5): False = Menü-Objekte ohne resume_intention
     dismissed_hints: List[str] = field(default_factory=list)   # abgelehnte Vorschläge für die ganze Disc (z. B. Filmauswahl)
+    # Disc-Größe (v1.36, im Start-Knoten; bis v1.35 eine App-Einstellung in Vorbereiten). "" = nicht gesetzt:
+    # ältere Projekte, die beim Öffnen die bisherige App-Einstellung übernehmen
+    disc_size: str = ""
+
+    def disc_size_key(self) -> str:
+        """Gültige Disc-Größe ("bd25" | "bd50"); nicht gesetzt oder unbekannt: BD-25."""
+        return self.disc_size if self.disc_size in DISC_SIZE_BYTES else DEFAULT_DISC_SIZE
 
     def player_title(self) -> str:
         """Titel, den der Player anzeigt: eigener Titel oder der Disc-Name mit Leerzeichen statt „_“."""

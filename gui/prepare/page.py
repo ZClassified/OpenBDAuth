@@ -26,9 +26,10 @@ from PySide6.QtCore import Qt, QTimer, Signal, QSettings, QStandardPaths, QItemS
 from PySide6.QtWidgets import (
     QMainWindow, QDockWidget, QTreeWidget, QTreeWidgetItem, QStackedWidget, QLabel, QWidget, QVBoxLayout,
     QHBoxLayout, QTextEdit, QFileDialog, QMessageBox, QAbstractItemView, QHeaderView, QComboBox, QProgressBar,
-    QInputDialog,
+    QInputDialog, QPushButton,
 )
 
+from core.disc_model import DISC_SIZE_BYTES, DISC_SIZE_NAMES
 from core.translations import tr, tr_file_filter, ui_language
 from gui.app_language import SETTINGS_ORG, SETTINGS_APP
 from gui.icons import job_kind_icon, level_icon, settings_mark_icon, LEVEL_ERROR, LEVEL_OK, LEVEL_INFO
@@ -132,6 +133,7 @@ class PreparePage(QMainWindow):
     status = Signal(str)                 # Meldung für die Statusleiste des Studios
     running_changed = Signal(bool)
     progress_text = Signal(str)          # Fortschritt für die Statusleiste beider Seiten ("" = nichts läuft)
+    disc_settings_requested = Signal()   # „ändern“ an der Disc-Größe: zum Start-Knoten (v1.36)
 
     def __init__(self, controller, importer, parent=None, persist: bool = True):
         super().__init__(parent)
@@ -147,7 +149,6 @@ class PreparePage(QMainWindow):
         self._overwrite_ok: set = set()              # beim Start bestätigt: vorhandene Zieldateien ersetzen
         self._rates: Dict[str, float] = {}           # Sekunden Arbeit je Sekunde Laufzeit, je Art (Restzeit)
         self.common_dir: Optional[str] = None        # „ein Ordner für alle“, sonst neben der Quelle
-        self.disc_size = "bd25"
         self._timer = QTimer(self)
         self._timer.setInterval(POLL_MS)
         self._timer.timeout.connect(self._poll)
@@ -237,8 +238,15 @@ class PreparePage(QMainWindow):
         self.lbl_common_dir.setMaximumWidth(260)
         self.lbl_disc = QLabel()
         self.lbl_disc.setStyleSheet("color: #A1A1AA;")
-        self.combo_disc = QComboBox()
-        self.combo_disc.activated.connect(self._on_disc_size)
+        # v1.36: Größe nur anzeigen; eingestellt wird sie im Start-Knoten der Disc („ändern“ springt dorthin)
+        self.lbl_disc_size = QLabel()
+        self.lbl_disc_size.setStyleSheet("color: #E4E4E7; font-weight: bold;")
+        self.btn_disc_change = QPushButton()
+        self.btn_disc_change.setFlat(True)
+        self.btn_disc_change.setCursor(Qt.PointingHandCursor)
+        self.btn_disc_change.setStyleSheet("QPushButton { color: #FCD34D; border: none; padding: 2px 4px; }"
+                                           "QPushButton:hover { text-decoration: underline; }")
+        self.btn_disc_change.clicked.connect(self.disc_settings_requested.emit)
         self.gauge = QProgressBar()
         self.gauge.setRange(0, 100)
         self.gauge.setFixedWidth(160)
@@ -250,7 +258,7 @@ class PreparePage(QMainWindow):
         for w in (self.lbl_out_mode, self.combo_out_mode, self.lbl_common_dir):
             layout.addWidget(w)
         layout.addSpacing(18)
-        for w in (self.lbl_disc, self.combo_disc, self.gauge, self.lbl_gauge):
+        for w in (self.lbl_disc, self.lbl_disc_size, self.btn_disc_change, self.gauge, self.lbl_gauge):
             layout.addWidget(w)
         return bar
 
@@ -306,7 +314,6 @@ class PreparePage(QMainWindow):
             return
         settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
         self.common_dir = settings.value("prepare/common_dir", "") or None
-        self.disc_size = settings.value("prepare/disc_size", "bd25") or "bd25"
         for task in tasks.load_queue(self.queue_path()):
             self.tasks.append(task)
             self._add_row(task)
@@ -322,7 +329,6 @@ class PreparePage(QMainWindow):
             self.status.emit(str(e))
         settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
         settings.setValue("prepare/common_dir", self.common_dir or "")
-        settings.setValue("prepare/disc_size", self.disc_size)
 
     # --- Aufträge anlegen ----------------------------------------------------------
     def choose_files(self):
@@ -505,9 +511,12 @@ class PreparePage(QMainWindow):
         self.lbl_common_dir.setVisible(bool(self.common_dir))
         self.lbl_common_dir.setText(self.common_dir or "")
         self.lbl_common_dir.setToolTip(self.common_dir or "")
-        fill_combo(self.combo_disc, [("bd25", "BD-25"), ("bd50", "BD-50")], self.disc_size)
+        size = self.controller.project.settings.disc_size_key()
+        self.lbl_disc_size.setText(DISC_SIZE_NAMES[size])
+        self.btn_disc_change.setText(self.t("prep_disc_change"))
+        self.btn_disc_change.setToolTip(self.t("prep_disc_change_tip"))
         used = self.disc_bytes()
-        capacity = tasks.DISC_SIZES[self.disc_size]
+        capacity = DISC_SIZE_BYTES[size]
         share = used / capacity
         self.gauge.setValue(int(min(1.0, share) * 100))
         number = (lambda x: f"{x:.1f}".replace(".", ",")) if self._lang() == "de" else (lambda x: f"{x:.1f}")
@@ -558,11 +567,6 @@ class PreparePage(QMainWindow):
                 task.out_dir = tasks.default_out_dir(task.source, folder)
                 self._update_row(task)
         self.inspector.refresh()
-        self._save()
-        self._refresh_header()
-
-    def _on_disc_size(self, _index: int):
-        self.disc_size = self.combo_disc.currentData()
         self._save()
         self._refresh_header()
 

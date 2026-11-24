@@ -53,9 +53,8 @@ Disc-Größe    [ BD-25 | BD-50 ]            bei UHD: [ BD-50 | BD-66 | BD-100 ]
 
 - Neue Projekte und ältere Projektdateien sind „Blu-ray“; für bestehende Nutzer ändert sich nichts.
 - Bei UHD zeigt der Start-Knoten im Graph ein kleines „UHD“.
-- Die **Disc-Größe zieht hierher um.** Heute steht sie in der Fußzeile von Vorbereiten und wird app-weit gespeichert
-  (`gui/prepare/page.py`, `prepare/disc_size`); künftig gehört sie zum Projekt. Das gilt auch ohne UHD und kann
-  vorab in `main` erscheinen.
+- Die **Disc-Größe steht schon hier** (v1.36.0, `DiscSettings.disc_size`); Vorbereiten zeigt sie nur an. Für UHD
+  kommen die Größen BD-66 und BD-100 dazu, und die Auswahl hängt vom Disc-Typ ab.
 
 **Vorbereiten (Auftrag): was aus einem Film wird, im Rahmen des Disc-Typs.**
 
@@ -120,10 +119,9 @@ nur die technischen Angaben (Codec, Auflösung, Bildrate, Dynamikbereich, Metada
 
 ## Phase 1 – Disc-Modell und Projekt
 
-- Projektmodell (`core/disc_model.py`, `DiscSettings`): Disc-Typ `bluray` | `uhd` und Disc-Größe. Ältere Projekte
-  sind `bluray`, ihre Größe kommt beim Öffnen aus der bisherigen App-Einstellung. Bedienung im Start-Knoten (siehe
+- Projektmodell (`core/disc_model.py`, `DiscSettings`): Disc-Typ `bluray` | `uhd`. Ältere Projekte sind `bluray`. Bedienung im Start-Knoten (siehe
   „Bedienung“). Bei `uhd` ist 3D gesperrt (Vorbereiten, Film-Knoten, Export).
-- Disc-Größe aus Vorbereiten in den Start-Knoten (unabhängig von UHD, kann vorab in `main`).
+- Disc-Größe: schon im Start-Knoten (v1.36.0); BD-66/BD-100 und die Abhängigkeit vom Disc-Typ ergänzen.
 - Dynamikbereich je Film (`sdr709` | `sdr2020` | `hdr10`), aus der Datei gelesen. Ob Filme mit verschiedenem
   Dynamikbereich auf einer Disc liegen dürfen und welchem Film die Menüs folgen, entscheidet Phase 0.9; bis dahin
   lehnt die Vorprüfung Mischungen ab.
