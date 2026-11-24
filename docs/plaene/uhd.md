@@ -154,6 +154,21 @@ Fehlende oder widersprüchliche Kennzeichnung (z. B. PQ ohne BT.2020) führt zur
 Umsetzung als eigenes Paket `hevctools/`, genauso aufgebaut wie `mvctools/` (NAL-Einheiten, VPS/SPS/PPS, SEI, VUI,
 Prüfbericht). Dieselbe Prüfung läuft auch nach jeder eigenen Kodierung aus Weg A.
 
+**Stand (2026-11-24, `feature/uhd`): `hevctools/` ist umgesetzt** – `python -m hevctools.check FILM.hevc [--range
+hdr10]` und `python -m hevctools.analyze` (ausführlicher Bericht). Geprüft wird alles aus der Liste oben; die
+Puffer-Prüfung ist eine Näherung mit gleichem Bildabstand. Dolby Vision und HDR10+ werden abgelehnt (nicht entfernt).
+Tests mit selbst erzeugten x265-Clips (`tests/test_hevctools.py`).
+
+Die Regeln stammen aus dem, was **x265 4.3 mit `--uhd-bd` erzwingt** (ausprobiert): Level 5.1 High Tier, Main 10,
+4:2:0, 10 Bit, progressiv, 1920×1080 oder 3840×2160, Primärfarben BT.709/BT.2020, Übertragung BT.709/BT.2020-10/PQ
+(kein HLG), Matrix BT.709/BT.2020, geschlossene GOPs, Keyframe-Abstand höchstens die Bildrate (eine Sekunde),
+höchstens 6 Referenzen, AUD, HRD, Parameter-Sets an jedem Einstiegspunkt. Noch zu belegen (tsMuxeR/libbluray,
+Phase 0.4): Bildraten-Liste, ob HDR-SEI an jedem Einstiegspunkt stehen müssen.
+
+**Wichtig für Phase 3:** Passt eine Bedingung nicht (z. B. 1280×720 oder fehlende Farbkennzeichnung), meldet x265
+nur „uhd-bd: Disabled“ und **kodiert trotzdem weiter**. Jede eigene Kodierung muss deshalb mit `hevctools` geprüft
+werden, und die Farbkennzeichnung muss immer ausdrücklich übergeben werden.
+
 ## Phase 3 – Kodierung (Prepare)
 
 - Auftrag auf einer UHD-Disc: Auflösung 2160 | 1080 (Bedienung siehe oben); 1080 ergibt einen HD-Film im Format aus
@@ -165,7 +180,8 @@ Prüfbericht). Dieselbe Prüfung läuft auch nach jeder eigenen Kodierung aus We
 - Zwei Durchläufe oder CRF mit Obergrenze, abgestimmt auf die Bitraten-Grenze der gewählten Disc-Größe; die
   Füllanzeige rechnet mit.
 - Prüfen, ob die mitgelieferte ffmpeg-Version (`tools/fetch_tools.py`) auf allen drei Systemen `libx265` mit 10 Bit
-  enthält. Sonst x265 als eigenes Werkzeug mitliefern.
+  enthält. Sonst x265 als eigenes Werkzeug mitliefern. Windows: ja (ffmpeg 9.0.2 essentials, x265 4.3, 8/10/12 Bit).
+  Linux und macOS: offen, zeigt ein CI-Lauf von `feature/uhd` (die x265-Tests werden sonst übersprungen).
 - Selbsttest (`modules/prepare/selftest.py`): kurzer UHD-Clip, den ffmpeg selbst erzeugt (Testbild, kein fremdes
   Material), danach Prüfung mit `hevctools`. Automatische Tests verwenden ebenfalls nur selbst erzeugte Clips.
 - Dauer ehrlich anzeigen: 4K-HEVC ist um ein Vielfaches langsamer als 1080p-H.264. Die Warteschlange über Nacht ist
@@ -244,11 +260,12 @@ Erst wenn alles besteht, wird `feature/uhd` in `main` übernommen und als eine V
    Menü-Hintergrund (0.6).
 3. Bildraten für 2160p und 1080p HEVC.
 4. Bitraten-Grenzen je Disc-Größe (Video und Transportstrom), BD-25 überhaupt zulässig.
-5. Grenzen für GOP, Level und Tier.
+5. Grenzen für GOP, Level und Tier. Teilweise belegt durch x265 `--uhd-bd` (Level 5.1 High Tier, geschlossene
+   GOPs, höchstens eine Sekunde, höchstens 6 Referenzen); Gegenprobe mit tsMuxeR/libbluray offen.
 6. Wie der Player SDR-Grafik (IG, PG) auf HDR abbildet; ob die Palette BT.2020 sein darf.
 7. Player-Register für UHD im Simulator.
 8. BDXL unter IMAPI2, macOS und Linux; Profil und Abschluss bei BD-R XL.
-9. Enthält die mitgelieferte ffmpeg-Version auf allen Systemen `libx265` mit 10 Bit?
+9. Enthält die mitgelieferte ffmpeg-Version auf allen Systemen `libx265` mit 10 Bit? Windows: ja; Linux/macOS: CI-Lauf.
 10. HDR- und SDR-Filme auf einer Disc: Umschalten des Fernsehers, Dynamikbereich der Menüs (0.9).
 
 ## Anhang A – Feldliste Version 3

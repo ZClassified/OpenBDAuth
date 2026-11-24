@@ -25,6 +25,39 @@ HAS_FFMPEG = _has_libx264()
 needs_ffmpeg = unittest.skipUnless(HAS_FFMPEG, "ffmpeg mit libx264 nicht gefunden")
 
 
+def _has_libx265():
+    try:
+        out = subprocess.run([FFMPEG_PATH, '-hide_banner', '-encoders'], capture_output=True, text=True,
+                             creationflags=jobs.NO_WINDOW).stdout
+    except OSError:
+        return False
+    return "libx265" in out
+
+
+HAS_X265 = _has_libx265()
+needs_x265 = unittest.skipUnless(HAS_X265, "ffmpeg mit libx265 nicht gefunden")
+
+# Farbkennzeichnung je Dynamikbereich für x265 (hevctools.check.RANGES)
+X265_COLOUR = {"sdr709": "colorprim=bt709:transfer=bt709:colormatrix=bt709",
+               "sdr2020": "colorprim=bt2020:transfer=bt2020-10:colormatrix=bt2020nc",
+               "hdr10": "colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:hdr10=1:"
+                        "master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):"
+                        "max-cll=1000,400"}
+
+
+def make_hevc(path, seconds=0.5, size="1920x1080", rate="24000/1001", colour="sdr709", uhd_bd=True, extra="",
+              pix_fmt="yuv420p10le"):
+    """Kleiner HEVC-Elementarstrom mit x265 (ultrafast); mit uhd_bd die Regeln von x265 --uhd-bd, HRD und VBV."""
+    params = [X265_COLOUR.get(colour, colour), "log-level=error"]
+    if uhd_bd:
+        params += ["uhd-bd=1", "vbv-maxrate=20000", "vbv-bufsize=20000"]
+    if extra:
+        params.append(extra)
+    ffmpeg('-f', 'lavfi', '-i', f"testsrc2=s={size}:r={rate}:d={seconds}", '-pix_fmt', pix_fmt,
+           '-c:v', 'libx265', '-preset', 'ultrafast', '-b:v', '8M', '-x265-params', ":".join(params),
+           '-f', 'hevc', path)
+
+
 def setUpModule():
     use_bundled_tools()
 
