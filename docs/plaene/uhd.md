@@ -245,6 +245,16 @@ werden, und die Farbkennzeichnung muss immer ausdrücklich übergeben werden.
   Material), danach Prüfung mit `hevctools`. Automatische Tests verwenden ebenfalls nur selbst erzeugte Clips.
 - Dauer ehrlich anzeigen: 4K-HEVC ist um ein Vielfaches langsamer als 1080p-H.264. Die Warteschlange über Nacht ist
   hier der Normalfall.
+- **MaxCLL und MaxFALL messen** (Idee aus dem ersten Resolve-Test): HDR10 braucht neben dem Mastering-Display zwei
+  Angaben über den Inhalt – MaxCLL (hellstes einzelnes Pixel des Films, in Nits) und MaxFALL (durchschnittliche
+  Helligkeit des hellsten Bildes). Der Fernseher richtet danach sein Tone Mapping aus. Resolve schreibt sie in
+  ProRes meist nicht mit; heute trägt man sie ein oder setzt 0/0 („unbekannt“, erlaubt, der Fernseher nimmt dann
+  den ungünstigsten Fall an). Vorbereiten soll sie selbst messen können: jedes Bild dekodieren, PQ-Werte in Nits
+  umrechnen (je Pixel das Maximum von R, G, B), daraus das hellste Pixel und den hellsten Bilddurchschnitt. Ablauf:
+  eigener Schritt vor der Kodierung, wenn die Datei keine Werte mitbringt (oder auf Wunsch), Ergebnis im
+  Inspektor und in der Kodierung. Zu prüfen: Weg der Messung (ffmpeg-Filter oder eigene Auswertung der Bilder,
+  ohne zusätzliche Bibliotheken) und Dauer bei einem Spielfilm in 4K; ob die Messung im ersten Durchlauf von
+  „Genau“ mitlaufen kann.
 
 **Stand (2026-11-24, `feature/uhd`): Backend umgesetzt** in `modules/prepare/uhd.py` (noch ohne Oberfläche, die
 folgt nach dem Disc-Typ aus Phase 1): Quellprüfung, x265-Befehle für „Genau“ und „Schnell“, HDR10-Metadaten aus der
@@ -356,6 +366,7 @@ Erst wenn alles besteht, wird `feature/uhd` in `main` übernommen und als eine V
 9. Enthält die mitgelieferte ffmpeg-Version auf allen Systemen `libx265` mit 10 Bit? Windows: ja; Linux/macOS: CI-Lauf.
 10. HDR- und SDR-Filme auf einer Disc: Umschalten des Fernsehers, Dynamikbereich der Menüs (0.9).
 11. Spitzenrate von gebrannten BD-R 25/50 im Player und Stufen der Datenrate (0.10, 0.11).
+12. MaxCLL/MaxFALL selbst messen: Verfahren und Dauer (Phase 3).
 
 ## Anhang A – Feldliste Version 3
 
