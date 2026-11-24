@@ -1,6 +1,6 @@
 # Plan: Ultra HD Blu-ray (UHD) – 2160p, SDR und HDR10, mit HDMV-Menüs
 
-Stand: 2026-11-22 · Status: **Planung**, noch nichts umgesetzt. Zuerst kommt ein Machbarkeitstest (Phase 0). Erst
+Stand: 2026-11-24 · Status: **Planung**, noch nichts umgesetzt. Zuerst kommt ein Machbarkeitstest (Phase 0). Erst
 danach fällt die Entscheidung, ob UHD gebaut wird.
 
 ## Ziel und Grundsätze
@@ -20,13 +20,17 @@ Kapitel-, Ton- und Untertitelmenü, Pop-up). Das ist derselbe Funktionsumfang wi
   `--blu-ray-v3`). Dazu kommt der Vergleich mit dem, was tsMuxeR selbst erzeugt. Jede Angabe, die nicht belegt ist,
   steht in diesem Plan als **„zu prüfen“** und wird vor der Umsetzung geklärt.
 - **3D und UHD schließen sich aus.** UHD-Blu-ray kennt kein 3D. Der Disc-Typ ist eine Projekteinstellung: Blu-ray
-  (2D/3D) oder Ultra HD Blu-ray.
+  (2D/3D) oder Ultra HD Blu-ray. Er gilt für die ganze Disc: Eine UHD-Disc spielt nur auf UHD-Playern, auch ihre
+  HD-Filme; eine Blu-ray kann keine UHD-Filme enthalten.
+- **Entscheiden, wo es hingehört.** Was für eine Disc es wird, steht an einer Stelle (Start-Knoten); was aus einem
+  Film wird, entscheidet der Auftrag in Vorbereiten, im Rahmen des Disc-Typs. Kein zweiter Schalter, nichts wird
+  still umgestellt (siehe „Bedienung“).
 
 ## Umfang
 
 | Bereich | Inhalt |
 |---|---|
-| Video | 2160p HEVC Main10, 10 Bit 4:2:0. SDR in BT.709 und BT.2020, HDR10 (BT.2020, PQ, statische Metadaten). 1080p HEVC als zweites Format (zu prüfen: erlaubte Kombinationen) |
+| Video | 2160p HEVC Main10, 10 Bit 4:2:0. SDR in BT.709 und BT.2020, HDR10 (BT.2020, PQ, statische Metadaten). Dazu HD-Filme (1080p) auf derselben UHD-Disc, z. B. für Extras: als HEVC oder, falls erlaubt, als H.264 (Phase 0.8) |
 | Bildraten | 23.976, 24, 25, 50, 59.94 progressiv (zu prüfen: vollständige Liste für 2160p und 1080p HEVC) |
 | Anlieferung | Mezzanine (ProRes, DNxHR) oder fertig kodierter HEVC-Strom, siehe Phase 2 |
 | Ton | wie heute (AC-3, DTS, LPCM, TrueHD und DTS-HD durchgereicht, Atmos und DTS:X im Kern-Strom enthalten) |
@@ -36,6 +40,36 @@ Kapitel-, Ton- und Untertitelmenü, Pop-up). Das ist derselbe Funktionsumfang wi
 | Kapazität | BD-50, BD-66, BD-100 mit den jeweiligen Bitraten-Grenzen; BD-25 zu prüfen |
 | Simulator | liest UHD-Discs, Vorschau von HDR auf SDR heruntergerechnet |
 | Brennen | BD-R/BD-RE wie heute, dazu **BDXL** (BD-R XL TL/QL, BD-RE XL) auf allen drei Systemen |
+
+### Bedienung
+
+**Start-Knoten (Inspektor „Disc“): was für eine Disc es wird.** Dort stehen schon Disc-Name, Titel im Player und
+Sprache der Disc; dazu kommen:
+
+```
+Disc-Typ      [ Blu-ray | Ultra HD Blu-ray ]
+Disc-Größe    [ BD-25 | BD-50 ]            bei UHD: [ BD-50 | BD-66 | BD-100 ]
+```
+
+- Neue Projekte und ältere Projektdateien sind „Blu-ray“; für bestehende Nutzer ändert sich nichts.
+- Bei UHD zeigt der Start-Knoten im Graph ein kleines „UHD“.
+- Die **Disc-Größe zieht hierher um.** Heute steht sie in der Fußzeile von Vorbereiten und wird app-weit gespeichert
+  (`gui/prepare/page.py`, `prepare/disc_size`); künftig gehört sie zum Projekt. Das gilt auch ohne UHD und kann
+  vorab in `main` erscheinen.
+
+**Vorbereiten (Auftrag): was aus einem Film wird, im Rahmen des Disc-Typs.**
+
+- Blu-ray-Disc: wie heute (2D | 3D, 1080 | 720).
+- UHD-Disc: Auflösung 2160 | 1080; der Dynamikbereich (HDR10, SDR BT.709/BT.2020) wird aus der Datei gelesen und
+  angezeigt, nicht gewählt; kein 3D.
+- Oben in Vorbereiten nur eine Anzeige „Disc: Ultra HD · BD-66 · ändern“; „ändern“ springt zum Start-Knoten.
+- 4K-Quelle in einem Blu-ray-Projekt: Hinweis am Auftrag „Für 2160 den Disc-Typ auf Ultra HD stellen“.
+
+**Was nicht passt, wird gemeldet, nicht umgestellt.** 3D-Film in einem UHD-Projekt, fertiger 2160p-Strom in einem
+Blu-ray-Projekt, Film zu groß für die Disc: Film-Knoten rot markiert, die Vorprüfung nennt den Grund. Wird der
+Disc-Typ umgestellt, während schon unpassende Filme im Projekt sind, sagt ein Hinweis vorher, welche das sind.
+
+**Export und Brennen:** Hinweis „Diese Disc spielt nur auf UHD-Playern“, bevor gebrannt wird.
 
 ### Nicht im Umfang
 
@@ -69,10 +103,14 @@ nur die technischen Angaben (Codec, Auflösung, Bildrate, Dynamikbereich, Metada
 | 0.5 | Funktioniert **unser HDMV-Menü** auf einer UHD-Disc? | Disc aus 0.2, von Hand ergänzt: IGS-Menü aus OpenBDAuth, Playlist und Clip-Infos auf `0300` gesetzt, Hintergrund als HEVC. Zwei Varianten: Hintergrund 2160p und 1080p |
 | 0.6 | Ist H.264 als Menü-Hintergrund auf einer UHD-Disc erlaubt? | Variante von 0.5 mit dem heutigen H.264-Hintergrund. Klappt das nicht oder ist es laut libbluray/tsMuxeR nicht vorgesehen, wird der Hintergrund immer HEVC |
 | 0.7 | Wie verhalten sich Menüs auf HDR? | (a) SDR-Menü, dann HDR-Film: schaltet der Fernseher um, wie lange ist er schwarz? (b) HDR10-Menü mit Grafik in verschiedenen Helligkeiten der Palette. (c) Pop-up über HDR-Film. (d) PG-Untertitel über HDR-Film. Ergebnis: Helligkeit, die für Weiß in der Grafik gilt (zu prüfen: wie der Player SDR-Grafik auf PQ abbildet, ob die Palette BT.2020 sein kann) |
+| 0.8 | Dürfen HD-Filme auf einer UHD-Disc liegen, und in welchem Format? | Disc aus 0.2 um einen 1080p-Film ergänzen, einmal als H.264, einmal als HEVC. Spielt der X700 beide, auch per Menü-Sprung? Gegenlesen mit libbluray/tsMuxeR, ob H.264 auf `0300`-Discs vorgesehen ist. Ergebnis bestimmt, ob fertige HD-Extras unverändert übernommen werden können oder nach HEVC kodiert werden müssen |
+| 0.9 | HDR- und SDR-Filme auf einer Disc? | HDR10-Film und SDR-Film auf derselben Disc mit Menü. Wie lange ist der Fernseher beim Wechsel schwarz? In welchem Dynamikbereich wirkt das Menü bei beiden Filmen gut? Ergebnis: ob Mischen angeboten wird und welchem Film das Menü folgt |
 
 **Entscheidung nach Phase 0:**
 
-- **Weiter**, wenn 0.2 (HDR10), 0.5 und 0.7 auf dem X700 sauber laufen und 0.4 alle Felder erklärt.
+- **Weiter**, wenn 0.2 (HDR10), 0.5 und 0.7 auf dem X700 sauber laufen und 0.4 alle Felder erklärt. 0.8 und 0.9
+  entscheiden nicht über das Ob, sondern über den Umfang: Fallen sie negativ aus, gibt es auf UHD-Discs nur
+  2160p-Filme bzw. nur einen Dynamikbereich je Disc.
 - **Abbruch**, wenn der X700 unverschlüsselte UHD-Discs verweigert oder sich das Verhalten der Menüs auf HDR nicht
   belegen lässt. Dann wird das Ergebnis hier und in `HARDWARE_TESTS.md` festgehalten, und UHD wird nicht gebaut.
 - Ein zweiter UHD-Player (andere Marke) wäre für die Abnahme in Phase 8 sehr wertvoll, weil die Spezifikation Raum für
@@ -82,15 +120,18 @@ nur die technischen Angaben (Codec, Auflösung, Bildrate, Dynamikbereich, Metada
 
 ## Phase 1 – Disc-Modell und Projekt
 
-- `core/project_state.py`: Disc-Typ `bluray` | `uhd`. Bei `uhd` ist 3D gesperrt (Prepare, Film-Knoten, Export).
-  Ältere Projekte sind automatisch `bluray`.
-- Dynamikbereich der Disc: `sdr709` | `sdr2020` | `hdr10`. Er gilt für alle Filme und Menüs einer Disc, damit der
-  Fernseher nie umschaltet. Mischungen lehnt die Vorprüfung ab (zu prüfen: ob kommerzielle Discs mischen; falls ja,
-  trotzdem nicht anbieten).
+- Projektmodell (`core/disc_model.py`, `DiscSettings`): Disc-Typ `bluray` | `uhd` und Disc-Größe. Ältere Projekte
+  sind `bluray`, ihre Größe kommt beim Öffnen aus der bisherigen App-Einstellung. Bedienung im Start-Knoten (siehe
+  „Bedienung“). Bei `uhd` ist 3D gesperrt (Vorbereiten, Film-Knoten, Export).
+- Disc-Größe aus Vorbereiten in den Start-Knoten (unabhängig von UHD, kann vorab in `main`).
+- Dynamikbereich je Film (`sdr709` | `sdr2020` | `hdr10`), aus der Datei gelesen. Ob Filme mit verschiedenem
+  Dynamikbereich auf einer Disc liegen dürfen und welchem Film die Menüs folgen, entscheidet Phase 0.9; bis dahin
+  lehnt die Vorprüfung Mischungen ab.
 - Kapazität: BD-50, BD-66, BD-100 (BD-25 nach Ergebnis von 0.3), mit Füllanzeige und Bitraten-Grenzen je Größe
   (zu prüfen: maximale Rate des Transportstroms je Disc-Größe).
-- `core/disc_rules.py`, `core/preflight.py`: Regeln für UHD (Disc-Typ, einheitlicher Dynamikbereich, Bitrate,
-  Bildraten, keine 3D-Inhalte, keine H.264-Filme).
+- `core/disc_rules.py`, `core/preflight.py`: Regeln für UHD (Disc-Typ passt zu jedem Film, Dynamikbereich, Bitrate,
+  Bildraten, keine 3D-Inhalte, HD-Filme nur im Format, das Phase 0.8 belegt). Unpassende Filme: Knoten rot,
+  Meldung mit Grund.
 
 ## Phase 2 – Anlieferung und Prüfung des Materials
 
@@ -116,6 +157,9 @@ Umsetzung als eigenes Paket `hevctools/`, genauso aufgebaut wie `mvctools/` (NAL
 Prüfbericht). Dieselbe Prüfung läuft auch nach jeder eigenen Kodierung aus Weg A.
 
 ## Phase 3 – Kodierung (Prepare)
+
+- Auftrag auf einer UHD-Disc: Auflösung 2160 | 1080 (Bedienung siehe oben); 1080 ergibt einen HD-Film im Format aus
+  Phase 0.8.
 
 - Neues x265-Profil in `modules/prepare/jobs.py`: `--uhd-bd` als Grundlage, Main10, HRD, AUD, wiederholte Header,
   GOP nach Bildrate, Farbkennzeichnung, bei HDR10 `--master-display` und `--max-cll` aus dem Projekt.
@@ -198,7 +242,8 @@ Erst wenn alles besteht, wird `feature/uhd` in `main` übernommen und als eine V
 ## Offene Fragen (Sammlung, wird in Phase 0 abgearbeitet)
 
 1. Aufbau der UHD-Zusatzdaten in `index.bdmv`, `.mpls`, `.clpi` (Anhang A).
-2. Erlaubte Video-Kombinationen auf einer UHD-Disc: 1080p HEVC, H.264 als Menü-Hintergrund.
+2. Erlaubte Video-Kombinationen auf einer UHD-Disc: HD-Filme als 1080p HEVC oder H.264 (0.8), H.264 als
+   Menü-Hintergrund (0.6).
 3. Bildraten für 2160p und 1080p HEVC.
 4. Bitraten-Grenzen je Disc-Größe (Video und Transportstrom), BD-25 überhaupt zulässig.
 5. Grenzen für GOP, Level und Tier.
@@ -206,6 +251,7 @@ Erst wenn alles besteht, wird `feature/uhd` in `main` übernommen und als eine V
 7. Player-Register für UHD im Simulator.
 8. BDXL unter IMAPI2, macOS und Linux; Profil und Abschluss bei BD-R XL.
 9. Enthält die mitgelieferte ffmpeg-Version auf allen Systemen `libx265` mit 10 Bit?
+10. HDR- und SDR-Filme auf einer Disc: Umschalten des Fernsehers, Dynamikbereich der Menüs (0.9).
 
 ## Anhang A – Feldliste Version 3
 
