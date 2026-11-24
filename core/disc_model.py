@@ -93,6 +93,11 @@ class FilmNode:
     def is_3d(self) -> bool:
         return bool(self.video_mvc)
 
+    @property
+    def is_hevc(self) -> bool:
+        """Video ist ein HEVC-Strom (Ultra HD Blu-ray), erkannt an der Dateiendung."""
+        return bool(self.video_base) and self.video_base.lower().endswith(HEVC_EXTENSIONS)
+
     def chapter_index(self, chapter_id: str) -> Optional[int]:
         for i, ch in enumerate(self.chapters):
             if ch.id == chapter_id:
@@ -198,6 +203,9 @@ class MenuNode:
 DISC_SIZE_BYTES = {"bd25": 25_000_000_000, "bd50": 50_000_000_000}   # dezimal wie die Rohlinge
 DISC_SIZE_NAMES = {"bd25": "BD-25", "bd50": "BD-50"}
 DEFAULT_DISC_SIZE = "bd25"
+# Disc-Typ (UHD-Plan, Phase 1): eine Ultra HD Blu-ray spielt nur auf UHD-Playern und kennt kein 3D
+DISC_BLURAY, DISC_UHD = "bluray", "uhd"
+HEVC_EXTENSIONS = (".hevc", ".h265", ".265")
 
 
 @dataclass
@@ -215,6 +223,11 @@ class DiscSettings:
     # Disc-Größe (v1.36, im Start-Knoten; bis v1.35 eine App-Einstellung in Vorbereiten). "" = nicht gesetzt:
     # ältere Projekte, die beim Öffnen die bisherige App-Einstellung übernehmen
     disc_size: str = ""
+    disc_type: str = DISC_BLURAY        # "bluray" | "uhd" (UHD-Plan, Phase 1)
+
+    @property
+    def is_uhd(self) -> bool:
+        return self.disc_type == DISC_UHD
 
     def disc_size_key(self) -> str:
         """Gültige Disc-Größe ("bd25" | "bd50"); nicht gesetzt oder unbekannt: BD-25."""

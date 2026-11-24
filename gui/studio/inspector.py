@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 
 from core import menu_design, menu_templates, disc_edit, node_frames
 from core.translations import tr, tr_file_filter, ui_language
-from core.disc_model import START_NODE_ID, DISC_SIZE_NAMES
+from core.disc_model import START_NODE_ID, DISC_SIZE_NAMES, DISC_BLURAY, DISC_UHD
 from core.disc_edit import TRACK_AUDIO, TRACK_SUBTITLE, tracks
 from core.disc_rules import button_label, starts_3d_film
 from core.disc_model import (
@@ -131,6 +131,12 @@ class StartPage(_Page):
         self.combo_lang.addItem("Deutsch", "de")
         self.combo_lang.addItem("English", "en")
         self.combo_lang.currentIndexChanged.connect(self._on_lang)
+        # Disc-Typ (UHD-Plan, Phase 1): Blu-ray oder Ultra HD Blu-ray; was ein Film wird, entscheidet Vorbereiten
+        self.lbl_type = QLabel()
+        self.combo_type = QComboBox()
+        for key in (DISC_BLURAY, DISC_UHD):
+            self.combo_type.addItem("", key)
+        self.combo_type.activated.connect(self._on_disc_type)
         # Disc-Größe (v1.36): gehört zum Projekt; Vorbereiten zeigt sie mit Füllstand an
         self.lbl_size = QLabel()
         self.combo_size = QComboBox()
@@ -140,7 +146,7 @@ class StartPage(_Page):
             lambda _i: self.controller.set_settings("Disc-Größe ändern", disc_size=self.combo_size.currentData()))
         self.lbl_target = hint_label()
         for w in (self.lbl_name, self.edit_name, self.lbl_title, self.edit_title, self.lbl_lang, self.combo_lang,
-                  self.lbl_size, self.combo_size, self.lbl_target):
+                  self.lbl_type, self.combo_type, self.lbl_size, self.combo_size, self.lbl_target):
             self.card.layout_.addWidget(w)
         layout.addWidget(self.card)
         layout.addStretch(1)
@@ -163,6 +169,31 @@ class StartPage(_Page):
         if lang and lang != self.controller.project.settings.app_lang:
             self.controller.set_settings("Sprache der Disc ändern", app_lang=lang)
 
+    def _on_disc_type(self, _index: int):
+        """Umstellen mit Rückfrage: UHD spielt nur auf UHD-Playern; Filme, die nicht mehr passen, werden genannt."""
+        from core.disc_rules import films_not_fitting
+        disc_type = self.combo_type.currentData()
+        project = self.controller.project
+        if disc_type == project.settings.disc_type:
+            return
+        misfits = films_not_fitting(project, disc_type)
+        parts = [self.t("studio_disc_type_uhd_only")] if disc_type == DISC_UHD else []
+        if misfits:
+            parts.append(self.t("studio_disc_type_misfits_uhd" if disc_type == DISC_UHD
+                                else "studio_disc_type_misfits_bluray",
+                                films=", ".join(f"„{f.name}“" for f in misfits)))
+        if parts and not self.confirm_disc_type("\n\n".join(parts + [self.t("studio_disc_type_confirm")])):
+            self.refresh()
+            return
+        self.controller.set_settings("Disc-Typ ändern", disc_type=disc_type)
+
+    def confirm_disc_type(self, text: str) -> bool:
+        """Rückfrage beim Umstellen (in Tests ersetzbar)."""
+        from PySide6.QtWidgets import QMessageBox
+        answer = QMessageBox.question(self, self.t("studio_disc_type"), text,
+                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        return answer == QMessageBox.Yes
+
     def refresh(self):
         s = self.controller.project.settings
         _set_text_if_idle(self.edit_name, s.project_name)
@@ -173,6 +204,8 @@ class StartPage(_Page):
             self.combo_lang.blockSignals(True)
             self.combo_lang.setCurrentIndex(idx)
             self.combo_lang.blockSignals(False)
+        _fill_combo(self.combo_type, [(DISC_BLURAY, self.t("studio_disc_type_bluray")),
+                                      (DISC_UHD, self.t("studio_disc_type_uhd"))], s.disc_type)
         _fill_combo(self.combo_size, [(k, n) for k, n in DISC_SIZE_NAMES.items()], s.disc_size_key())
         target = self.controller.project.node(self.controller.project.start_target)
         self.lbl_target.setText(self.t("studio_start_target", name=target.name) if target
@@ -185,6 +218,8 @@ class StartPage(_Page):
         self.lbl_title.setText(self.t("studio_disc_title"))
         self.edit_title.setToolTip(self.t("studio_disc_title_tip"))
         self.lbl_lang.setText(self.t("studio_ui_lang"))
+        self.lbl_type.setText(self.t("studio_disc_type"))
+        self.combo_type.setToolTip(self.t("studio_disc_type_tip"))
         self.lbl_size.setText(self.t("studio_disc_size"))
         self.combo_size.setToolTip(self.t("studio_disc_size_tip"))
 

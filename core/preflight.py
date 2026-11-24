@@ -74,6 +74,16 @@ def run_preflight(project: DiscProject, check_files: bool = True) -> List[Issue]
         hints = [w for w in film.compliance_warnings if w.get("severity") != "error"]
         if hints and not film.warnings_acknowledged:
             add(WARNING, tr("pf_film_hints_unconfirmed", film=film.name, n=len(hints)), film.id)
+        # Disc-Typ (UHD-Plan, Phase 1)
+        if project.settings.is_uhd and film.is_3d:
+            add(ERROR, tr("pf_uhd_3d_film", film=film.name), film.id)
+        elif not project.settings.is_uhd and film.is_hevc:
+            add(ERROR, tr("pf_bluray_hevc_film", film=film.name), film.id)
+        elif project.settings.is_uhd and film.video_base and not film.is_hevc:
+            add(WARNING, tr("pf_uhd_h264_film", film=film.name), film.id)
+    if project.settings.is_uhd:
+        # vorläufig (feature/uhd): Disc-Struktur Version 3 folgt in Phase 4
+        add(ERROR, tr("pf_uhd_not_ready"), START_NODE_ID)
 
     if project.main_menu is not None:
         for cycle in film_cycles(project):

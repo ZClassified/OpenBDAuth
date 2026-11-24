@@ -176,6 +176,12 @@ nur die technischen Angaben (Codec, Auflösung, Bildrate, Dynamikbereich, Metada
   Bildraten, keine 3D-Inhalte, HD-Filme nur im Format, das Phase 0.8 belegt). Unpassende Filme: Knoten rot,
   Meldung mit Grund.
 
+**Stand (2026-11-24, `feature/uhd`): Disc-Typ umgesetzt** – `DiscSettings.disc_type`, Auswahl im Start-Knoten mit
+Rückfrage (nur UHD-Player, unpassende Filme genannt), Untertitel „Ultra HD Blu-ray“ am Start-Knoten, Anzeige in
+Vorbereiten, Vorprüfung (3D auf UHD und HEVC auf Blu-ray: Fehler; H.264 auf UHD: Hinweis bis Phase 0.8). Solange
+Phase 4 fehlt, sperrt die Vorprüfung den Export einer UHD-Disc. Disc-Größen bei UHD vorerst BD-25 und BD-50;
+BD-66/BD-100 kommen mit BDXL (Phase 6). Tests: `tests/test_disc_type.py`.
+
 ## Phase 2 – Anlieferung und Prüfung des Materials
 
 Zwei Wege, beide fest beschrieben (Spezifikation für User in README und in der Oberfläche):

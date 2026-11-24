@@ -512,7 +512,9 @@ class PreparePage(QMainWindow):
         self.lbl_common_dir.setText(self.common_dir or "")
         self.lbl_common_dir.setToolTip(self.common_dir or "")
         size = self.controller.project.settings.disc_size_key()
-        self.lbl_disc_size.setText(DISC_SIZE_NAMES[size])
+        uhd = self.controller.project.settings.is_uhd
+        self.lbl_disc_size.setText(f"{self.t('prep_disc_uhd')} · {DISC_SIZE_NAMES[size]}" if uhd
+                                   else DISC_SIZE_NAMES[size])
         self.btn_disc_change.setText(self.t("prep_disc_change"))
         self.btn_disc_change.setToolTip(self.t("prep_disc_change_tip"))
         used = self.disc_bytes()

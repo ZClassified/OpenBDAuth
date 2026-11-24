@@ -663,7 +663,8 @@ class NodeScene(QGraphicsScene):
             self.addItem(item)
             self.frames[group.id] = item
             item.setSelected(group.id in selected_frames)
-        self._add_node(NodeItem(START_NODE_ID, "start", tr("graph_start_title"), tr("graph_start_subtitle"),
+        start_sub = tr("graph_start_subtitle_uhd" if project.settings.is_uhd else "graph_start_subtitle")
+        self._add_node(NodeItem(START_NODE_ID, "start", tr("graph_start_title"), start_sub,
                                 start_rows(), C_GOLD))
         for film in project.films:
             self._add_node(NodeItem(film.id, "film", film.name, film_subtitle(film), film_rows(film, project),

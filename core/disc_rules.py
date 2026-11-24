@@ -276,3 +276,11 @@ def button_label(project: DiscProject, menu: MenuNode, button: MenuButton) -> st
     if button.is_content:
         return auto_label(project, menu, button)
     return ""
+
+
+def films_not_fitting(project: DiscProject, disc_type: str) -> list:
+    """Filme, die nicht auf eine Disc dieses Typs passen: 3D auf Ultra HD Blu-ray, HEVC auf Blu-ray."""
+    from core.disc_model import DISC_UHD
+    if disc_type == DISC_UHD:
+        return [f for f in project.films if f.is_3d]
+    return [f for f in project.films if f.is_hevc]
