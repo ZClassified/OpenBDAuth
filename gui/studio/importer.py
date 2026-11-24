@@ -46,6 +46,10 @@ class FilmImporter(QObject):
         self._workers: List[_AudioWorker] = []
         self.probe = self._probe_video  # in Tests ersetzbar
         self.check_pair = self._check_pair  # in Tests ersetzbar (v1.21: 3D-Paar in eigenem Prozess prüfen)
+        self.check_hevc = self._check_hevc  # in Tests ersetzbar (UHD, Weg B: HEVC-Strom in eigenem Prozess prüfen)
+        # Von Vorbereiten erzeugt und dort schon geprüft: Pfad → (Größe, Änderungszeit); diese prüft der Import
+        # nicht noch einmal (bei einem Spielfilm dauert das Minuten)
+        self.checked_hevc = {}
 
     # --- Einstieg --------------------------------------------------------------
     def import_files(self, film_id: Optional[str], paths: List[str], pos: Optional[QPointF] = None) -> Optional[str]:
@@ -100,6 +104,10 @@ class FilmImporter(QObject):
         details = self.probe(path, bool(film.video_mvc))
         warnings = details.get("warnings", []) if details else []
         warnings = warnings + self._stereo_warnings(details, path, film.video_mvc)
+        if self._is_hevc(path) and not self._already_checked(path):
+            result = self.check_hevc(path)
+            warnings = warnings + result.get("warnings", [])
+            details = {**(details or {}), **result.get("details", {})}
         self.controller.set_film_fields(
             film_id, "Video wählen",
             video_base=path,
@@ -186,17 +194,59 @@ class FilmImporter(QObject):
         from modules.prepare.checks import stereo_format_warnings
         return stereo_format_warnings(details) + self.check_pair(base, mvc)
 
+    @staticmethod
+    def _is_hevc(path: str) -> bool:
+        from core.disc_model import HEVC_EXTENSIONS
+        return path.lower().endswith(HEVC_EXTENSIONS)
+
+    def mark_checked(self, path: str):
+        """Datei aus Vorbereiten (dort schon mit hevctools geprüft): beim Übernehmen nicht noch einmal prüfen."""
+        try:
+            st = os.stat(path)
+        except OSError:
+            return
+        self.checked_hevc[os.path.normcase(os.path.abspath(path))] = (st.st_size, st.st_mtime)
+
+    def _already_checked(self, path: str) -> bool:
+        try:
+            st = os.stat(path)
+        except OSError:
+            return False
+        return self.checked_hevc.get(os.path.normcase(os.path.abspath(path))) == (st.st_size, st.st_mtime)
+
+    def _check_hevc(self, path: str) -> dict:
+        """Prüft einen HEVC-Strom in einem eigenen Prozess, mit Fortschritt und Abbrechen (UHD, Weg B)."""
+        from modules.prepare.checks import check_hevc, hevc_unchecked_warning
+        task = self._run_check(check_hevc, (path,), tr("imp_checking_hevc", file=os.path.basename(path)),
+                               tr("imp_check_hevc"))
+        if task.cancelled:
+            self.status.emit(tr("imp_check_cancelled"))
+            return {"warnings": [hevc_unchecked_warning(tr("cw_check_cancelled"))]}
+        if task.error:
+            return {"warnings": [hevc_unchecked_warning(tr("cw_check_failed", err=task.error))]}
+        return task.result or {}
+
     def _check_pair(self, base: str, mvc: str) -> list:
         """Prüft das 3D-Paar in einem eigenen Prozess, mit Fortschritt und Abbrechen (modules/prepare)."""
+        from modules.prepare.checks import check_pair, unchecked_warning
+        task = self._run_check(check_pair, (base, mvc), tr("imp_checking_pair", file=os.path.basename(mvc)),
+                               tr("imp_check_3d"))
+        if task.cancelled:
+            self.status.emit(tr("imp_check_cancelled"))
+            return [unchecked_warning(tr("cw_check_cancelled"))]
+        if task.error:
+            return [unchecked_warning(tr("cw_check_failed", err=task.error))]
+        return task.result or []
+
+    def _run_check(self, func, args: tuple, text: str, title: str):
+        """func(*args, progress=…) in einem eigenen Prozess mit Fortschrittsfenster; gibt die BackgroundTask zurück."""
         from PySide6.QtCore import QEventLoop, QTimer, Qt
         from PySide6.QtWidgets import QProgressDialog
         from modules.prepare.background import BackgroundTask
-        from modules.prepare.checks import check_pair, unchecked_warning
 
-        task = BackgroundTask(check_pair, base, mvc)
-        dialog = QProgressDialog(tr("imp_checking_pair", file=os.path.basename(mvc)), tr("imp_cancel"), 0, 100,
-                                 self.parent())
-        dialog.setWindowTitle(tr("imp_check_3d"))
+        task = BackgroundTask(func, *args)
+        dialog = QProgressDialog(text, tr("imp_cancel"), 0, 100, self.parent())
+        dialog.setWindowTitle(title)
         dialog.setWindowModality(Qt.WindowModal)
         dialog.setMinimumDuration(400)
         dialog.canceled.connect(task.cancel)
@@ -215,12 +265,7 @@ class FilmImporter(QObject):
         if not task.finished:
             loop.exec()
         dialog.close()
-        if task.cancelled:
-            self.status.emit(tr("imp_check_cancelled"))
-            return [unchecked_warning(tr("cw_check_cancelled"))]
-        if task.error:
-            return [unchecked_warning(tr("cw_check_failed", err=task.error))]
-        return task.result or []
+        return task
 
     def free_position(self):
         positions = self.controller.project.view.node_positions.values()

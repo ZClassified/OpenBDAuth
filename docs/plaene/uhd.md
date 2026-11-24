@@ -257,8 +257,15 @@ HDR10-Werten; Eingabe der Grading-Werte (Mastering-Display DCI-P3 D65 oder BT.20
 wenn die Datei keine mitbringt – ohne sie startet der Auftrag nicht. Wurde der Disc-Typ nach dem Hinzufügen
 umgestellt: Hinweis und „An den Disc-Typ anpassen“. Auf einer Blu-ray nennt die Ablehnung einer 4K-HDR-Quelle den
 Weg über den Disc-Typ. `.hevc` lässt sich in Film-Knoten übernehmen, Kenndaten und Bildrate aus dem SPS
-(`hevctools.stream.quick_info`). Noch offen: Weg B (fertiger HEVC-Strom direkt in den Film-Knoten) mit vollständiger
-Prüfung im Hintergrund, wie beim 3D-Paar. Tests: `tests/test_prepare_uhd_page.py`.
+(`hevctools.stream.quick_info`). Tests: `tests/test_prepare_uhd_page.py`.
+
+**Stand (2026-11-24, `feature/uhd`): Weg B umgesetzt.** Ein `.hevc` im Film-Knoten wird mit `hevctools` in einem
+eigenen Prozess geprüft (Fortschritt, Abbrechen; `modules/prepare/checks.check_hevc`). Fehler werden ein
+Hinweis mit severity „error“ (Vorprüfung blockiert, Bestätigen hilft nicht), Warnungen ein bestätigbarer Hinweis,
+ein Abbruch der Hinweis „nicht geprüft“. Dauer und Dynamikbereich gehen in die Kenndaten des Films. Ergebnisse aus
+Vorbereiten (dort schon geprüft) werden beim Übernehmen nicht noch einmal geprüft (Größe und Änderungszeit
+gleich). Vorprüfung: verschiedene Dynamikbereiche auf einer UHD-Disc vorerst ein Fehler (bis Phase 0.9). Tests:
+`tests/test_hevc_import.py`.
 
 ## Phase 4 – Disc-Struktur Version 3
 

@@ -1,6 +1,7 @@
 # modules/prepare/checks.py
 """
-Prüfungen von 3D-Videos beim Import in den Film-Knoten (v1.21): Basis-Video (.264) und Dependent View (.mvc).
+Prüfungen beim Import in den Film-Knoten: 3D-Videos (v1.21, Basis-Video .264 und Dependent View .mvc) und
+HEVC-Ströme für Ultra HD Blu-ray (UHD-Plan, Weg B: fertiger Strom, wird nicht neu kodiert, sondern geprüft).
 
 Ergebnisse im Format der Kompatibilitätshinweise (modules/video_tools.ComplianceWarning.to_dict):
 - severity "error": Das Paar passt nachweislich nicht zusammen (mvctools.verify). Der Preflight meldet es als
@@ -66,3 +67,35 @@ def check_pair(base_path: str, mvc_path: str,
 def unchecked_warning(reason: str) -> dict:
     """Hinweis, wenn die Paar-Prüfung abgebrochen wurde oder nicht lief (bestätigbar wie andere Hinweise)."""
     return ComplianceWarning.of("MVC_PAIR_UNCHECKED", reason=reason).to_dict()
+
+
+def check_hevc(path: str, progress: Optional[Callable[[float], None]] = None) -> dict:
+    """
+    Prüft einen HEVC-Strom nach den Regeln für Ultra HD Blu-ray (hevctools.check). Rückgabe: {"warnings": [...],
+    "details": {...}} – Fehler als ein Hinweis mit severity "error" (Bestätigen hilft nicht), Warnungen als ein
+    bestätigbarer Hinweis; details ergänzt die Kenndaten (Dauer, Bildanzahl, HDR-Werte).
+    """
+    from hevctools.check import ERROR, WARNING, check_stream
+
+    size = max(os.path.getsize(path), 1)
+    findings, info = check_stream(path, progress=(lambda _label, offset: progress(min(1.0, offset / size)))
+                                  if progress else None)
+    warnings = []
+    for level, code in ((ERROR, "HEVC_UHD_ERROR"), (WARNING, "HEVC_UHD_WARNING")):
+        texts = [f.text for f in findings if f.level == level]
+        if texts:
+            shown = texts[:PAIR_PROBLEMS_SHOWN]
+            more = len(texts) - len(shown)
+            details = "; ".join(shown) + (tr("cw_more", n=more) if more > 0 else "")
+            warnings.append(ComplianceWarning.of(code, severity="error" if level == ERROR else "warning",
+                                                 details=details).to_dict())
+    details = {"duration_s": info["duration"]} if info.get("duration") else {}
+    if info.get("dynamic_range"):
+        details["dynamic_range"] = info["dynamic_range"]
+    details["pictures"] = info.get("pictures", 0)
+    return {"warnings": warnings, "details": details}
+
+
+def hevc_unchecked_warning(reason: str) -> dict:
+    """Hinweis, wenn die HEVC-Prüfung abgebrochen wurde oder nicht lief (bestätigbar)."""
+    return ComplianceWarning.of("HEVC_UNCHECKED", reason=reason).to_dict()

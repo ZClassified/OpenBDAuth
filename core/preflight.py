@@ -82,6 +82,11 @@ def run_preflight(project: DiscProject, check_files: bool = True) -> List[Issue]
         elif project.settings.is_uhd and film.video_base and not film.is_hevc:
             add(WARNING, tr("pf_uhd_h264_film", film=film.name), film.id)
     if project.settings.is_uhd:
+        ranges = {(f.video_details or {}).get("dynamic_range") for f in project.films if f.is_hevc} - {None}
+        if len(ranges) > 1:
+            # bis Phase 0.9 klärt, wie Fernseher und Menüs den Wechsel vertragen
+            add(ERROR, tr("pf_uhd_mixed_range", ranges=", ".join(tr(f"uhd_range_{r}") for r in sorted(ranges))),
+                START_NODE_ID)
         # vorläufig (feature/uhd): Disc-Struktur Version 3 folgt in Phase 4
         add(ERROR, tr("pf_uhd_not_ready"), START_NODE_ID)
 

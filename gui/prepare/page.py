@@ -833,6 +833,10 @@ class PreparePage(QMainWindow):
             return
         # Video zuerst: ein neuer Film-Knoten entsteht aus dem Video, Ton kommt danach dazu
         outputs.sort(key=lambda p: 0 if p.lower().endswith((".264", ".mvc", ".hevc")) else 1)
+        for task in selection:
+            if task.kind == tasks.KIND_UHD:
+                for path in task.outputs:
+                    self.importer.mark_checked(path)        # der Auftrag hat sie schon mit hevctools geprüft
         stack = self.controller.undo_stack
         stack.beginMacro(self.t("prep_take"))        # ein Klick = ein Schritt (Film anlegen + Dateien)
         try:
