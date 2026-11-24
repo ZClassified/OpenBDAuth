@@ -146,6 +146,8 @@ class SourceInfo:
     color_space: str = ""
     dolby_vision: bool = False
     has_audio: bool = False        # v1.29.1: nur für den Hinweis, dass der Ton nicht übernommen wird
+    pix_fmt: str = ""              # UHD (modules/prepare/uhd.py): Bittiefe und Farbunterabtastung der Quelle
+    bit_depth: int = 8
 
 
 def parse_fps(video):
@@ -246,6 +248,15 @@ def _video_stream(data):
                  and not s.get('disposition', {}).get('attached_pic')), None)
 
 
+def _bit_depth(video):
+    """Bittiefe aus bits_per_raw_sample, sonst aus dem Pixelformat (yuv422p10le → 10, yuv420p → 8)."""
+    raw = str(video.get('bits_per_raw_sample', '') or '')
+    if raw.isdigit() and int(raw) > 0:
+        return int(raw)
+    match = re.search(r"p(\d{2})(le|be)?$", video.get('pix_fmt', '') or '')
+    return int(match.group(1)) if match else 8
+
+
 def probe_video(path):
     """SourceInfo einer Videodatei; ValueError, wenn die Datei keine (lesbare) Videospur hat."""
     data = probe(path)
@@ -260,7 +271,8 @@ def probe_video(path):
                       color_transfer=video.get('color_transfer', ''),
                       color_primaries=video.get('color_primaries', ''),
                       color_space=video.get('color_space', ''), dolby_vision=dovi,
-                      has_audio=any(s.get('codec_type') == 'audio' for s in data.get('streams', [])))
+                      has_audio=any(s.get('codec_type') == 'audio' for s in data.get('streams', [])),
+                      pix_fmt=video.get('pix_fmt', ''), bit_depth=_bit_depth(video))
 
 
 def stereo_layout(width, height):

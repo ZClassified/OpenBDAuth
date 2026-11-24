@@ -232,6 +232,18 @@ werden, und die Farbkennzeichnung muss immer ausdrücklich übergeben werden.
 - Dauer ehrlich anzeigen: 4K-HEVC ist um ein Vielfaches langsamer als 1080p-H.264. Die Warteschlange über Nacht ist
   hier der Normalfall.
 
+**Stand (2026-11-24, `feature/uhd`): Backend umgesetzt** in `modules/prepare/uhd.py` (noch ohne Oberfläche, die
+folgt nach dem Disc-Typ aus Phase 1): Quellprüfung, x265-Befehle für „Genau“ und „Schnell“, HDR10-Metadaten aus der
+Datei (erstes Bild) oder angegeben, Prüfung jedes Ergebnisses mit `hevctools`, Platzbedarf inklusive x265-Statistik
+(„Genau“ bei 2160p ca. 36 KB je Bild, also rund 6 GB bei 2 Stunden). Preset `medium`. Tests:
+`tests/test_prepare_uhd.py` (auch echte Kodierungen aus ProRes- und HDR10-Testquellen). Erkenntnisse:
+
+- Die x265-Statistik wird relativ zum Zielordner benannt: `-x265-params` trennt an „:“, ein Windows-Pfad würde dort
+  zerbrechen.
+- ffmpeg schreibt die Farbkennzeichnung bei ProRes nicht vollständig aus den Ausgabeoptionen; für x265 ist das egal,
+  weil die Kennzeichnung direkt in `-x265-params` steht.
+- Ein roher `.hevc`-Strom als Quelle hat keine verlässliche Bildrate (ffprobe rät); das ist Weg B (nur prüfen).
+
 ## Phase 4 – Disc-Struktur Version 3
 
 Alle selbst geschriebenen Dateien bekommen eine UHD-Variante. Die Bluray-Variante bleibt unverändert (Tests sichern

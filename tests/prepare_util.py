@@ -46,8 +46,9 @@ X265_COLOUR = {"sdr709": "colorprim=bt709:transfer=bt709:colormatrix=bt709",
 
 
 def make_hevc(path, seconds=0.5, size="1920x1080", rate="24000/1001", colour="sdr709", uhd_bd=True, extra="",
-              pix_fmt="yuv420p10le"):
-    """Kleiner HEVC-Elementarstrom mit x265 (ultrafast); mit uhd_bd die Regeln von x265 --uhd-bd, HRD und VBV."""
+              pix_fmt="yuv420p10le", fmt="hevc"):
+    """Kleiner HEVC-Strom mit x265 (ultrafast); mit uhd_bd die Regeln von x265 --uhd-bd, HRD und VBV.
+    fmt: "hevc" (Elementarstrom) oder ein Container wie "matroska" (als Quelle für Vorbereiten)."""
     params = [X265_COLOUR.get(colour, colour), "log-level=error"]
     if uhd_bd:
         params += ["uhd-bd=1", "vbv-maxrate=20000", "vbv-bufsize=20000"]
@@ -55,7 +56,7 @@ def make_hevc(path, seconds=0.5, size="1920x1080", rate="24000/1001", colour="sd
         params.append(extra)
     ffmpeg('-f', 'lavfi', '-i', f"testsrc2=s={size}:r={rate}:d={seconds}", '-pix_fmt', pix_fmt,
            '-c:v', 'libx265', '-preset', 'ultrafast', '-b:v', '8M', '-x265-params', ":".join(params),
-           '-f', 'hevc', path)
+           '-f', fmt, path)
 
 
 def setUpModule():
