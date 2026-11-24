@@ -53,6 +53,8 @@ class MenuButtonSpec:
 
     # Form-Button (modules.button_shapes.ShapeStyle); None = Text-Button mit Beschriftung
     shape: Optional[object] = None
+    # v1.35: Farben und Deckkraft eines Text-Buttons (ShapeStyle des Menüs); None = Standardfarben
+    text_colors: Optional[object] = None
 
     # v1.13: Standard-Button seiner Seite; unsichtbarer Button (keine Grafik); löst beim Auswählen sofort aus
     is_default: bool = False

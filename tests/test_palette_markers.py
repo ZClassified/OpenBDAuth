@@ -83,14 +83,14 @@ class TestViewer(DesignerCase):
 
     def test_markers_and_missing_border(self):
         texts = sorted(m.text for m in self.designer.marker_items)
-        self.assertEqual(texts, sorted(["K1", "K2", "K3", "K4", "K5", "K6", "→ Hauptmenü"]))
+        self.assertEqual(texts, sorted(["▶ K1", "K2", "K3", "K4", "K5", "K6", "→ Hauptmenü"]))   # ▶ Start (v1.35)
         self.assertFalse(any(m.missing for m in self.designer.marker_items))
         chapter = self.menu.buttons[0]
         self.ctrl.set_button_content(self.page_id, chapter.id, self.film_id, None)
         app_instance.processEvents()
         self.assertTrue(self.designer.items[chapter.id].missing)
         (marker,) = [m for m in self.designer.marker_items if m.missing]
-        self.assertEqual(marker.text, "K?")
+        self.assertEqual(marker.text.lstrip("▶ "), "K?")
         self.win.viewer.chk_markers.setChecked(False)
         app_instance.processEvents()
         self.assertEqual(self.designer.marker_items, [])

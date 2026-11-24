@@ -61,14 +61,14 @@ SIZE_CURSORS = {"tl": Qt.SizeFDiagCursor, "br": Qt.SizeFDiagCursor, "tr": Qt.Siz
 
 
 @lru_cache(maxsize=512)
-def button_pixmap(text: str, width: int, height: int, state: str, shape=None) -> QtGui.QPixmap:
+def button_pixmap(text: str, width: int, height: int, state: str, shape=None, colors=None) -> QtGui.QPixmap:
     """Dieselbe Button-Grafik, die der Export in den Menüstrom schreibt (Stil-Generator oder Form)."""
     if shape is not None:
         from modules.button_shapes import create_shape_image
         img = create_shape_image(shape, width, height, state)
     else:
         from modules.menu_author import create_button_image
-        img = create_button_image(text, width, height, state)
+        img = create_button_image(text, width, height, state, colors)
     data = img.tobytes("raw", "RGBA")
     qimage = QtGui.QImage(data, img.width, img.height, 4 * img.width, QtGui.QImage.Format_RGBA8888).copy()
     return QtGui.QPixmap.fromImage(qimage)
@@ -668,16 +668,18 @@ class MenuPreview(QGraphicsView):
         current = self._current_button(menu) if remote else None
         self._remote_current = current
         specs = preview_menu_specs(project, menu)
-        default_id = menu_design.start_button_id(menu)
+        default_id = menu_design.start_button_id(project, menu)
         for button, spec in zip(menu.buttons, specs):
             state = self.state
             if remote:   # wie am Fernseher: der aktuelle Button ist ausgewählt (nach Enter kurz aktiviert)
                 state = ("activated" if self._remote_flash else "selected") if button.id == current else "normal"
             elif state == STATE_PLAYER:
                 state = "selected" if button.id == default_id else "normal"
-            pixmap = button_pixmap(spec.text, int(spec.width or 380), int(spec.height or 70), state, spec.shape)
+            pixmap = button_pixmap(spec.text, int(spec.width or 380), int(spec.height or 70), state, spec.shape,
+                                   spec.text_colors)
             item = _ButtonItem(spec, button.id, button.is_content, pixmap)
-            item.show_outline = not remote and spec.shape is not None and spec.shape.state_color(state)[3] == 0
+            style = spec.shape or spec.text_colors
+            item.show_outline = not remote and style is not None and style.state_color(state)[3] == 0
             item.state_name = state
             item.missing = not remote and (button.target is None if button.kind == BUTTON_NAV
                                            else not has_target(project, menu, button))
@@ -702,9 +704,13 @@ class MenuPreview(QGraphicsView):
         self._update_rulers()
 
     def _draw_markers(self, project, menu, specs):
+        start = menu_design.start_button_id(project, menu)
         for button, spec in zip(menu.buttons, specs):
             item = self.items[button.id]
-            marker = _MarkerItem(target_marker(project, menu, button), item.missing, button.id)
+            text = target_marker(project, menu, button)
+            if button.id == start:          # v1.35: der Button, der beim Öffnen ausgewählt ist
+                text = f"▶ {text}"
+            marker = _MarkerItem(text, item.missing, button.id)
             marker.setPos(spec.x, spec.y + spec.height)
             self.scene().addItem(marker)
             self.marker_items.append(marker)
@@ -846,7 +852,7 @@ class MenuPreview(QGraphicsView):
         sel_menu, sel_button = self.controller.selected_button if self.controller else ("", "")
         if sel_menu == menu.id and menu.button(sel_button) is not None:
             return sel_button
-        return menu_design.start_button_id(menu)
+        return menu_design.start_button_id(self.controller.project, menu)
 
     def _draw_guides(self, project, menu_id: str, snap_guide: Optional[str] = None):
         self.guide_items = {}
@@ -993,7 +999,7 @@ class MenuPreview(QGraphicsView):
         if button.kind == BUTTON_NAV:
             target_menu, target_film = project.menu(button.target), project.film(button.target)
             if target_menu is not None:
-                self.controller.select_button(target_menu.id, menu_design.start_button_id(target_menu))
+                self.controller.select_button(target_menu.id, menu_design.start_button_id(project, target_menu))
                 self.node_requested.emit(target_menu.id)   # erst wechseln (setzt die Meldung zurück), dann melden
                 self.remote_message.emit(self._t("remote_to_menu", name=target_menu.name))
                 return
@@ -1181,7 +1187,8 @@ class MenuPreview(QGraphicsView):
         r["result"] = result
         for item in r["items"]:
             x, y, w, h = result[item.button_id]
-            item.setPixmap(button_pixmap(item.spec.text, w, h, item.state_name, item.spec.shape))
+            item.setPixmap(button_pixmap(item.spec.text, w, h, item.state_name, item.spec.shape,
+                                         item.spec.text_colors))
             item.setPos(x, y)
         x, y, w, h = result[r["primary"]]
         self._draw_size_handles(QRectF(x, y, w, h))

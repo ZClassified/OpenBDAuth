@@ -1,8 +1,10 @@
 # tests/test_start_button.py
 """
 Start-Button und Standard-Auswahl:
-- Start-Button ohne festgelegten Standard-Button: erster Inhalts-Button in Lesereihenfolge (Kapitel 1), nicht der
-  zuerst angelegte ZURÜCK; ohne Inhalts-Buttons der erste oben links. Gilt in Viewer, Preflight und auf der Disc.
+- Start-Button ohne festgelegten Standard-Button: erster Button in Lesereihenfolge, der etwas abspielt oder einstellt
+  (Kapitel 1, FILM STARTEN, Ton), nicht der zuerst angelegte ZURÜCK; gibt es nur Links in Menüs, der erste oben
+  links. Gilt in Viewer, Preflight und auf der Disc.
+- v1.35: „FILM STARTEN“ zählt mit (vorher gewann ein Ton-Button darunter); Haken im Inspektor legt ihn fest.
 - Farbe für einen unsichtbaren Zustand (0 %) wählen macht ihn sichtbar (100 %).
 """
 
@@ -17,7 +19,7 @@ from PySide6.QtWidgets import QApplication
 from core import menu_design
 from core.disc_adapter import build_export_plan
 from core.disc_edit import add_menu, add_nav_button, add_button_of_kind, set_chapter_times
-from core.disc_model import BUTTON_CHAPTER
+from core.disc_model import BUTTON_CHAPTER, BUTTON_AUDIO, Track
 from gui.node_editor.controller import GraphController
 from modules.bdsim.player import Player, STATE_MENU
 from tests.project_factory import text_starter
@@ -46,16 +48,65 @@ def chapter_page():
 
 class TestStartButton(unittest.TestCase):
     def test_first_content_button_in_reading_order(self):
-        _project, _main, page, chapters = chapter_page()
+        project, _main, page, chapters = chapter_page()
         self.assertEqual(page.buttons[0].label, "ZURÜCK")
-        self.assertEqual(menu_design.start_button_id(page), chapters[2].id)   # oben links
-        page.default_button_id = page.buttons[0].id                          # festgelegt gewinnt
-        self.assertEqual(menu_design.start_button_id(page), page.buttons[0].id)
+        self.assertEqual(menu_design.start_button_id(project, page), chapters[2].id)   # oben links
+        page.default_button_id = page.buttons[0].id                                   # festgelegt gewinnt
+        self.assertEqual(menu_design.start_button_id(project, page), page.buttons[0].id)
 
-    def test_without_content_top_left(self):
+    def test_play_button_beats_menu_link(self):
         project, main, _page, _chapters = chapter_page()
-        main.buttons[1].position = [100, 100]                   # KAPITEL über FILM STARTEN
-        self.assertEqual(menu_design.start_button_id(main), main.buttons[1].id)
+        main.buttons[1].position = [100, 100]                   # KAPITEL (Link in ein Menü) über FILM STARTEN
+        self.assertEqual(main.buttons[0].label, "FILM STARTEN")
+        self.assertEqual(menu_design.start_button_id(project, main), main.buttons[0].id)
+
+    def test_only_menu_links_top_left(self):
+        project, main, page, _chapters = chapter_page()
+        main.buttons[0].target = page.id                        # FILM STARTEN führt jetzt auch nur in ein Menü
+        main.buttons[1].position = [100, 100]
+        self.assertEqual(menu_design.start_button_id(project, main), main.buttons[1].id)
+
+    def test_play_above_audio_buttons(self):
+        """Der Fall aus dem Test: FILM STARTEN oben, darunter DE und ENG – ausgewählt ist FILM STARTEN."""
+        project = text_starter()
+        film = project.films[0]
+        film.audio_tracks = [Track(id="a1", path="de.ac3", lang="deu"), Track(id="a2", path="en.ac3", lang="eng")]
+        main = project.main_menu
+        main.buttons[0].position = [760, 300]
+        for n, ref in enumerate(("a1", "a2")):
+            b = add_button_of_kind(project, main.id, BUTTON_AUDIO)
+            b.content_ref, b.position = ref, [560 + 400 * n, 600]
+        self.assertEqual(menu_design.start_button_id(project, main), main.buttons[0].id)
+
+    def test_inspector_checkbox_sets_default_button(self):
+        from gui.studio.main_window import StudioWindow
+        win = StudioWindow(persist_layout=False)
+        try:
+            ctrl = win.controller
+            main = ctrl.project.main_menu
+            other = add_button_of_kind(ctrl.project, main.id, BUTTON_CHAPTER)
+            other.position = [100, 900]
+            win.scene.select_node(main.id)
+            page = win.inspector.menu_page
+            ctrl.select_button(main.id, main.buttons[0].id)     # automatisch gewählt: Haken gesetzt
+            app_instance.processEvents()
+            self.assertTrue(page.check_start.isChecked())
+            page.check_start.click()                            # automatisch lässt sich nicht abwählen
+            app_instance.processEvents()
+            self.assertTrue(page.check_start.isChecked())
+            self.assertIsNone(ctrl.project.main_menu.default_button_id)
+            ctrl.select_button(main.id, other.id)
+            app_instance.processEvents()
+            self.assertFalse(page.check_start.isChecked())
+            page.check_start.click()                            # festlegen
+            app_instance.processEvents()
+            self.assertEqual(ctrl.project.main_menu.default_button_id, other.id)
+            page.check_start.click()                            # wieder automatisch
+            app_instance.processEvents()
+            self.assertIsNone(ctrl.project.main_menu.default_button_id)
+        finally:
+            win.controller.undo_stack.setClean()
+            win.close()
 
     def test_start_button_reaches_the_disc(self):
         project, _main, page, chapters = chapter_page()

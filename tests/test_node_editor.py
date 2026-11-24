@@ -335,11 +335,11 @@ class TestScene(unittest.TestCase):
         self.assertEqual(self.ctrl.project.main_menu.buttons[-1].target, bonus.id)
 
     def test_click_on_add_port_asks_for_label(self):
-        # v1.9.8: gibt es Menüs anzubieten, zeigt „＋ Button“ zuerst die Liste; „Neuer Button …“ fragt nach dem Text
+        # v1.9.8: „＋ Button“ zeigt zuerst die Liste; „Eigener Navigations-Button …“ fragt nach dem Text
         main = self.ctrl.project.main_menu
         prompted = []
         self.scene._prompt_add_button = prompted.append
-        self.scene._choose_offer = lambda offers, screen: "new"
+        self.scene._choose_offer = lambda menu, direct, offers, screen: "new"
         port_pos = self._add_port(main.id).scenePos()
         self._drag(Source.new_button(main.id), port_pos)
         self.assertEqual(prompted, [main.id])

@@ -154,6 +154,42 @@ class TestLayout(unittest.TestCase):
         return clone, clone.main_menu
 
 
+class TestTextButtonColors(unittest.TestCase):
+    """v1.35: Zustandsfarben und Deckkraft gelten auch für Text-Buttons; Standardfarben = Aussehen bis v1.34."""
+
+    def test_default_colors_look_as_before(self):
+        for state in ("normal", "selected", "activated"):
+            before = create_button_image("FILM STARTEN", 380, 70, state)
+            self.assertEqual(before.tobytes(), create_button_image("FILM STARTEN", 380, 70, state,
+                                                                   ShapeStyle()).tobytes())
+
+    def test_own_colors(self):
+        red = (0xEF, 0x44, 0x44)
+        style = ShapeStyle(color_normal=RED, color_selected=RED, color_activated=RED)
+        normal = create_button_image("TON", 300, 60, "normal", style)
+        self.assertIn((*red, 255), colors(normal))                       # Schrift in der Farbe
+        selected = create_button_image("TON", 300, 60, "selected", style)
+        self.assertIn((*red, 255), colors(selected))                     # Rahmen in der Farbe
+        self.assertNotIn((255, 215, 0, 255), colors(selected))           # kein Gold mehr
+        activated = create_button_image("TON", 300, 60, "activated", style)
+        self.assertEqual(activated.getpixel((150, 8))[:3], red)          # Fläche in der Farbe
+
+    def test_opacity_zero_invisible(self):
+        img = create_button_image("TON", 300, 60, "normal", ShapeStyle(opacity_normal=0))
+        self.assertEqual(img.getchannel("A").getextrema(), (0, 0))
+
+    def test_colors_reach_text_specs(self):
+        project = text_starter()
+        menu = project.main_menu
+        menu.button_style.kind = STYLE_TEXT
+        menu.button_style.color_selected = RED
+        specs = preview_menu_specs(project, menu)
+        self.assertTrue(specs)
+        for spec in specs:
+            self.assertIsNone(spec.shape)
+            self.assertEqual(spec.text_colors.color_selected, RED)
+
+
 class TestPalette(unittest.TestCase):
     def _text_page(self):
         buttons = []
@@ -241,6 +277,7 @@ class TestStudioUI(unittest.TestCase):
         app_instance.processEvents()
         self.assertEqual(self.ctrl.project.main_menu.button_style.kind, STYLE_TEXT)
         self.assertFalse(page.shape_box.isVisibleTo(page))
+        self.assertTrue(page.colors_box.isVisibleTo(page))                # Farben gelten ab v1.35 auch für Text
         self.assertEqual(page.switch_style.value(), STYLE_TEXT)
         self.ctrl.set_button_style(self.menu.id, kind=STYLE_SHAPE)
         app_instance.processEvents()
@@ -252,24 +289,31 @@ class TestStudioUI(unittest.TestCase):
         self.ctrl.undo_stack.undo()
         self.assertEqual(self.ctrl.project.main_menu.button_style.kind, STYLE_TEXT)
 
-    def test_look_switch_with_selected_button(self):
-        """v1.14.5: mit ausgewähltem Button zeigt der Inspektor den Stil des Menüs und kann ihn umschalten."""
+    def test_style_card_with_selected_button(self):
+        """v1.35: mit ausgewähltem Button steht der ganze Stil mit Farben beim Button, mit Hinweis aufs Menü."""
         self.win.scene.select_node(self.menu.id)
         self.ctrl.select_button(self.menu.id, self.menu.buttons[0].id)
         app_instance.processEvents()
         page = self.win.inspector.menu_page
-        self.assertTrue(page.style_bar.isVisibleTo(page))
-        self.assertFalse(page.card_style.isVisibleTo(page))
-        self.assertIn("Hauptmenü", page.lbl_look_hint.text())
-        self.assertEqual(page.switch_look.value(), STYLE_SHAPE)
-        page.switch_look.buttons[STYLE_TEXT].click()
+        self.assertTrue(page.sec_head.isVisibleTo(page))
+        self.assertTrue(page.card_style.isVisibleTo(page))
+        self.assertTrue(page.colors_box.isVisibleTo(page))
+        self.assertTrue(page.lbl_style_scope.isVisibleTo(page))
+        self.assertIn("Hauptmenü", page.lbl_style_scope.text())
+        layout = page.layout()                                            # nach den Angaben des Buttons
+        self.assertGreater(layout.indexOf(page.card_style), layout.indexOf(page.sec_geometry))
+        page.switch_style.buttons[STYLE_TEXT].click()
         app_instance.processEvents()
         self.assertEqual(self.ctrl.project.main_menu.button_style.kind, STYLE_TEXT)
-        self.assertEqual(page.switch_look.value(), STYLE_TEXT)
-        page.btn_look_more.click()                                        # „Form & Farben …“: zur Menü-Karte
+        self.assertTrue(page.colors_box.isVisibleTo(page))                # Farben auch für Text
+        self.assertFalse(page.shape_box.isVisibleTo(page))
+        self.ctrl.set_button_style(self.menu.id, color_selected=RED)
         app_instance.processEvents()
-        self.assertTrue(page.card_style.isVisibleTo(page))
-        self.assertFalse(page.style_bar.isVisibleTo(page))
+        self.assertEqual(page.state_rows["selected"][1].color(), RED)
+        self.ctrl.select_button(None, None)                               # zurück zum Menü
+        app_instance.processEvents()
+        self.assertFalse(page.lbl_style_scope.isVisibleTo(page))
+        self.assertLess(layout.indexOf(page.card_style), layout.indexOf(page.sec_head))
 
     def test_viewer_shows_invisible_shape_dotted(self):
         self.win.scene.select_node(self.menu.id)

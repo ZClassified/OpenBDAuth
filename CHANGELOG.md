@@ -5,6 +5,16 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.35.0] - 2026-11-24
+
+### Menüs: Buttons schneller anlegen, Start-Button und Farben beim Button
+
+- **„＋ Button“ im Menü-Knoten bietet fertige Buttons an:** „Film starten“ sowie Ton, Untertitel (mit „Aus“) und Kapitel des Films als Untermenüs mit den echten Spuren und Kapiteln. Ein Klick legt den Button mit Ziel und automatischer Beschriftung an und wählt ihn aus. Vorhandene sind mit ✓ markiert. Darunter folgen der eigene Navigations-Button und, als eigenes Menü, Kapitelmenü, Sprachmenü und Filmauswahl. Bisher entstand dort nur ein leerer Navigations-Button, dessen Typ man im Inspektor umstellen musste.
+- **Start-Button:** Automatisch ausgewählt ist jetzt der erste Button in Leserichtung, der etwas abspielt oder einstellt – auch „FILM STARTEN“, das bisher übersprungen wurde. Buttons, die nur in ein anderes Menü führen, kommen erst dran, wenn es nichts anderes gibt. Im Inspektor legt der Haken „Beim Öffnen des Menüs ausgewählt“ den Start-Button direkt beim Button fest; im Viewer markiert ein ▶ den Start-Button.
+- **Button-Stil beim Button:** Mit ausgewähltem Button steht die ganze Karte „Button-Stil“ mit Farben unter den Angaben des Buttons, mit dem Hinweis, dass sie für alle Buttons des Menüs gilt. Die kurze Leiste „Aussehen“ entfällt.
+- **Farben für Text-Buttons:** Die Zustandsfarben gelten jetzt auch für Text-Buttons (normal: Schrift, ausgewählt: Rahmen und Leuchten, aktiviert: Fläche), ebenso die Deckkraft. Mit den Standardfarben bleibt das Aussehen unverändert.
+- **Tests:** Angebot und Anlegen fertiger Buttons, Regel und Haken für den Start-Button, Farben und Deckkraft von Text-Buttons (Standardfarben bytegleich), Stil-Karte beim Button.
+
 ## [1.34.1] - 2026-11-22
 
 ### Brennen: Hinweis auf andere Brennprogramme

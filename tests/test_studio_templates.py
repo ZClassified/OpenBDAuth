@@ -226,20 +226,30 @@ class TestPopup(StudioCase):
         main = self.project.main_menu
         chosen = []
 
-        def choose(offers, screen):
+        def choose(menu, direct, offers, screen):
             chosen.append([(o.action, o.film_id) for o in offers])
+            self.assertTrue(direct)                              # fertige Buttons stehen darüber (v1.35)
             return next(o for o in offers if o.action == ACTION_LANGUAGE_MENU)
         scene._choose_offer = choose
         with mock.patch("gui.node_editor.create_popup.CreatePopup.exec_at", return_value=True):
             scene.offer_add(main.id)
         self.assertEqual(chosen, [[(ACTION_CHAPTER_MENU, self.film_id), (ACTION_LANGUAGE_MENU, self.film_id)]])
         self.assertEqual(self.project.main_menu.buttons[-1].label, "SPRACHE")
-        # nichts mehr anzubieten außer dem Kapitelmenü; ohne Angebote fragt „＋ Button“ gleich nach dem Text
+        # „Eigener Navigations-Button …“ fragt nach dem Text
         self.ctrl.create_chapter_menus(self.film_id)
         prompted = []
         scene._prompt_add_button = prompted.append
+        scene._choose_offer = lambda menu, direct, offers, screen: "new"
         scene.offer_add(main.id)
         self.assertEqual(prompted, [main.id])
+        # ein fertiger Button (v1.35): Ton-Button mit Ziel, ausgewählt
+        from core.disc_model import BUTTON_AUDIO
+        film = self.project.film(self.film_id)
+        scene._choose_offer = lambda menu, direct, offers, screen: next(o for o in direct if o.kind == BUTTON_AUDIO)
+        scene.offer_add(main.id)
+        button = self.ctrl.project.main_menu.buttons[-1]
+        self.assertEqual((button.kind, button.content_ref), (BUTTON_AUDIO, film.audio_tracks[0].id))
+        self.assertEqual(self.ctrl.selected_button, (main.id, button.id))
 
 
 class TestSceneActions(StudioCase):

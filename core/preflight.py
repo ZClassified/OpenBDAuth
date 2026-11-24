@@ -250,7 +250,7 @@ def _check_geometry(project: DiscProject, menu, add):
     # Pfeiltasten: alle Buttons vom Start-Button aus erreichbar? (wie die Prüfung im Simulator)
     by_number = {s.button_id: s for s in specs}
     from core.menu_design import start_button_id
-    start = start_button_id(menu)
+    start = start_button_id(project, menu)
     start_index = next((n for n, b in enumerate(menu.buttons) if b.id == start), 0)
     seen, todo = set(), [specs[start_index].button_id]
     while todo:

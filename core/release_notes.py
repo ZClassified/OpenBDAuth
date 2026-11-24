@@ -48,6 +48,25 @@ def date_text(release: Release, lang: str) -> str:
 
 
 RELEASES: Tuple[Release, ...] = (
+    Release("1.35.0", "2026-11-24",
+            de=Notes("Menüs schneller bauen", (
+                "„＋ Button“ im Menü-Knoten bietet fertige Buttons an: Film starten, Ton, Untertitel und Kapitel – "
+                "mit Ziel und Beschriftung, ein Klick genügt.",
+                "Welcher Button beim Öffnen eines Menüs ausgewählt ist, lässt sich jetzt direkt beim Button "
+                "festlegen. Automatisch ist es der erste Button, der etwas abspielt oder einstellt – auch "
+                "„FILM STARTEN“. Im Viewer zeigt ein ▶ den Start-Button.",
+                "Stil und Farben der Buttons stehen beim angeklickten Button. Auch Text-Buttons haben jetzt "
+                "einstellbare Farben; bestehende Menüs sehen aus wie bisher.",
+            )),
+            en=Notes("Build menus faster", (
+                "“＋ Button” on a menu node offers ready-made buttons: play film, audio, subtitles and chapters – "
+                "with target and label, one click is enough.",
+                "Which button is selected when a menu opens can now be set right on the button. Automatically it "
+                "is the first button that plays or sets something – including “PLAY MOVIE”. In the viewer a ▶ "
+                "marks the start button.",
+                "Button style and colours are shown with the clicked button. Text buttons now have adjustable "
+                "colours too; existing menus look as before.",
+            ))),
     Release("1.34.1", "2026-11-22",
             de=Notes("Hinweis auf andere Brennprogramme", (
                 "Der Bereich Brennen erinnert daran, dass sich die ISO auch mit jedem anderen Brennprogramm brennen "

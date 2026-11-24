@@ -332,6 +332,17 @@ class GraphController(QObject):
                      lambda p: disc_edit.add_nav_button(p, menu_id, label, button_id=button_id))
         return button_id
 
+    def add_offered_button(self, menu_id: str, offer) -> Optional[str]:
+        """Fertigen Button aus „＋ Button“ anlegen (ein Schritt) und auswählen (v1.35)."""
+        if self.project.menu(menu_id) is None:
+            return None
+        button_id = new_id("btn")
+        self.execute("Button hinzufügen", lambda p: disc_edit.add_offered_button(p, menu_id, offer, button_id))
+        if self.project.menu(menu_id).button(button_id) is None:
+            return None
+        self.select_button(menu_id, button_id)
+        return button_id
+
     def remove_button(self, menu_id: str, button_id: str):
         menu = self.project.menu(menu_id)
         if menu is None or menu.button(button_id) is None:

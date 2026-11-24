@@ -51,15 +51,55 @@ def fps_to_igs_rate_code(fps: float) -> int:
             return code
     return FPS_23_976  # Fallback
 
+# Text-Buttons (Stil „Text“): Balken, Rahmen und Schrift je Zustand als (Füllung, Rahmen, Rahmenbreite, Einzug, Schrift)
+# in RGBA. Das sind die Farben bis v1.34; sie gelten, solange die Zustandsfarbe des Menüs der Standard ist.
+_TEXT_LOOK_DEFAULT = {
+    "normal": ((25, 28, 35, 180), (160, 170, 190, 200), 2, 4, (230, 235, 245, 255)),
+    "selected": ((65, 50, 15, 230), (255, 215, 0, 255), 3, 2, (255, 235, 130, 255)),
+    "activated": ((255, 255, 255, 250), (255, 255, 255, 255), 3, 2, (10, 10, 10, 255)),
+}
+_TEXT_DEFAULT_COLORS = {"normal": "#FFFFFF", "selected": "#FFD700", "activated": "#FFFFFF"}
+
+
+def _mix(a: Tuple[int, int, int], b: Tuple[int, int, int], share_b: float) -> Tuple[int, int, int]:
+    return tuple(round(x * (1 - share_b) + y * share_b) for x, y in zip(a, b))
+
+
+def text_button_look(colors, state: str):
+    """
+    (Füllung, Rahmen, Rahmenbreite, Einzug, Schrift) eines Text-Buttons im Zustand. colors ist der Stil des Menüs
+    (modules.button_shapes.ShapeStyle, nur Farben und Deckkraft zählen) oder None. Ab v1.35 färbt die Zustandsfarbe
+    den Button: normal die Schrift, ausgewählt Rahmen und Leuchten, aktiviert die Fläche. Die Standardfarbe ergibt
+    genau das Aussehen bis v1.34.
+    """
+    look = _TEXT_LOOK_DEFAULT.get(state, _TEXT_LOOK_DEFAULT["normal"])
+    if colors is None:
+        return look
+    from modules.button_shapes import parse_hex_color
+    hex_color = getattr(colors, f"color_{state}", _TEXT_DEFAULT_COLORS.get(state, "#FFFFFF"))
+    if (hex_color or "").strip().upper() != _TEXT_DEFAULT_COLORS.get(state):
+        c = parse_hex_color(hex_color)
+        fill, _outline, width, inset, _text = look
+        if state == "selected":
+            look = ((*_mix(c, (0, 0, 0), 0.75), 230), (*c, 255), width, inset, (*_mix(c, (255, 255, 255), 0.5), 255))
+        elif state == "activated":
+            light = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2] > 140
+            look = ((*c, 250), (*c, 255), width, inset, (10, 10, 10, 255) if light else (245, 245, 245, 255))
+        else:
+            look = (fill, (*_mix(c, (0, 0, 0), 0.3), 200), width, inset, (*c, 255))
+    return look
+
+
 def create_button_image(
     text: str,
     width: int = 380,
     height: int = 70,
-    state: str = "normal"
+    state: str = "normal",
+    colors=None,
 ) -> Image.Image:
     """
     Erzeugt ein einzelnes Button-Grafikobjekt (RGBA) mit edlem Heimkino-Design.
-    state: 'normal', 'selected' oder 'activated'
+    state: 'normal', 'selected' oder 'activated'; colors: Farben und Deckkraft des Menüs (siehe text_button_look).
     """
     img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
@@ -84,41 +124,17 @@ def create_button_image(
     tx = (width - text_w) // 2
     ty = (height - text_h) // 2
 
-    radius = 12
+    # normal: halbtransparenter Balken mit dezentem Rahmen; ausgewählt: kräftiger Rahmen mit Leuchten;
+    # aktiviert: heller Blitz mit dunkler Schrift
+    fill, outline, line_width, inset, text_color = text_button_look(colors, state)
+    draw.rounded_rectangle([inset, inset, width - 1 - inset, height - 1 - inset], radius=12,
+                           fill=fill, outline=outline, width=line_width)
+    draw.text((tx, ty), text, fill=text_color, font=font)
 
-    if state == "normal":
-        # Ruhezustand: Halbtransparenter anthrazitfarbener Balken mit dezentem Rahmen
-        draw.rounded_rectangle(
-            [4, 4, width - 5, height - 5],
-            radius=radius,
-            fill=(25, 28, 35, 180),
-            outline=(160, 170, 190, 200),
-            width=2
-        )
-        draw.text((tx, ty), text, fill=(230, 235, 245, 255), font=font)
-
-    elif state == "selected":
-        # Ausgewählter Zustand: Kräftiger Gold-Glow Rahmen und leuchtender Text
-        draw.rounded_rectangle(
-            [2, 2, width - 3, height - 3],
-            radius=radius,
-            fill=(65, 50, 15, 230),
-            outline=(255, 215, 0, 255),
-            width=3
-        )
-        draw.text((tx, ty), text, fill=(255, 235, 130, 255), font=font)
-
-    elif state == "activated":
-        # Klick / Bestätigung: Weißer Blitz mit schwarzem Text
-        draw.rounded_rectangle(
-            [2, 2, width - 3, height - 3],
-            radius=radius,
-            fill=(255, 255, 255, 250),
-            outline=(255, 255, 255, 255),
-            width=3
-        )
-        draw.text((tx, ty), text, fill=(10, 10, 10, 255), font=font)
-
+    opacity = getattr(colors, f"opacity_{state}", 100) if colors is not None else 100
+    if opacity < 100:      # Deckkraft des Zustands (0 = unsichtbar) wie bei den Form-Buttons
+        factor = max(0, int(opacity)) / 100
+        img.putalpha(img.getchannel("A").point(lambda a: round(a * factor)))
     return img
 
 def button_state_image(spec: MenuButtonSpec, width: int, height: int, state: str) -> Image.Image:
@@ -126,7 +142,7 @@ def button_state_image(spec: MenuButtonSpec, width: int, height: int, state: str
     if spec.shape is not None:
         from modules.button_shapes import create_shape_image
         return create_shape_image(spec.shape, width, height, state)
-    return create_button_image(spec.text, width, height, state)
+    return create_button_image(spec.text, width, height, state, spec.text_colors)
 
 
 def create_default_background(width: int = 1920, height: int = 1080) -> Image.Image:

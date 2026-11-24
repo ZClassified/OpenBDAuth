@@ -166,30 +166,31 @@ def dpad_targets(project: DiscProject, menu: MenuNode) -> Dict[str, Dict[str, st
             for b, s in zip(menu.buttons, specs)}
 
 
-def start_button_id(menu: MenuNode) -> Optional[str]:
+def start_button_id(project: DiscProject, menu: MenuNode) -> Optional[str]:
     """
-    Button, der beim Öffnen des Menüs ausgewählt ist: der Standard-Button, sonst automatisch (v1.14.6) der erste
-    Inhalts-Button in Lesereihenfolge (Kapitel 1 statt des zuerst angelegten ZURÜCK), ohne Inhalts-Buttons der
-    erste oben links. Bis v1.14.5 war es der erste Button der Liste.
+    Button, der beim Öffnen des Menüs ausgewählt ist: der Standard-Button, sonst automatisch der erste Button in
+    Lesereihenfolge, der etwas abspielt oder einstellt (Film, Kapitel, Ton, Untertitel). Buttons, die nur in ein
+    anderes Menü führen (ZURÜCK, HAUPTMENÜ, WEITER), kommen erst dran, wenn es nichts anderes gibt.
+    Bis v1.14.5 war es der erste Button der Liste, bis v1.34 zählte „FILM STARTEN“ nicht mit.
     """
     if menu.default_button_id and menu.button(menu.default_button_id) is not None:
         return menu.default_button_id
-    return auto_start_button_id(menu)
+    return auto_start_button_id(project, menu)
 
 
-def auto_start_button_id(menu: MenuNode) -> Optional[str]:
+def auto_start_button_id(project: DiscProject, menu: MenuNode) -> Optional[str]:
     """Automatischer Start-Button (ohne festgelegten Standard-Button), siehe start_button_id."""
     if not menu.buttons:
         return None
     from core.menu_tools import reading_order
-    content = [b for b in menu.buttons if b.is_content]
-    return reading_order(menu, content or menu.buttons)[0].id
+    playing = [b for b in menu.buttons if b.is_content or project.film(b.target or "") is not None]
+    return reading_order(menu, playing or menu.buttons)[0].id
 
 
 def reachable_buttons(project: DiscProject, menu: MenuNode) -> set:
     """Buttons, die vom Start-Button aus mit den Pfeiltasten erreichbar sind (wie im Preflight)."""
     targets = dpad_targets(project, menu)
-    start = start_button_id(menu)
+    start = start_button_id(project, menu)
     seen, todo = set(), [start] if start else []
     while todo:
         button_id = todo.pop()

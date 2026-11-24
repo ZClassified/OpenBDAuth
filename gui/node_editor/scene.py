@@ -19,7 +19,8 @@ from PySide6.QtWidgets import (
 
 from core.disc_labels import disc_label
 from core.translations import tr, ui_language
-from core.disc_model import START_NODE_ID
+from core import disc_edit
+from core.disc_model import START_NODE_ID, BUTTON_NAV, BUTTON_AUDIO, BUTTON_SUBTITLE, BUTTON_CHAPTER
 from core.disc_edit import NODE_FILM, NODE_MENU, background_field
 from core.disc_rules import Source, SOURCE_BUTTON, SOURCE_FILM_END, SOURCE_NEW_BUTTON, connection_target
 from gui.node_editor.controller import GraphController
@@ -1274,38 +1275,74 @@ class NodeScene(QGraphicsScene):
 
     def offer_add(self, menu_id: str, screen: Optional[QtCore.QPoint] = None):
         """
-        „＋ Button“: neuer Button und alles, was von diesem Menü aus möglich ist (Kapitel- und Sprachmenü je
-        Film, Filmauswahl). Gibt es nichts anzubieten, gleich nach der Beschriftung fragen.
+        „＋ Button“: fertige Buttons mit Ziel (Film starten, Ton, Untertitel, Kapitel – v1.35), ein eigener
+        Navigations-Button und darunter alles, was als ganzes Menü möglich ist (Kapitel- und Sprachmenü je Film,
+        Filmauswahl).
         """
         from core import menu_templates as mt
-        menu = self.controller.project.menu(menu_id)
-        offers = mt.button_offers(self.controller.project, menu) if menu is not None else []
-        if not offers:
+        project = self.controller.project
+        menu = project.menu(menu_id)
+        if menu is None:
+            return
+        direct = disc_edit.button_offers_direct(project, menu)
+        offers = mt.button_offers(project, menu)
+        if not direct and not offers:
             self._prompt_add_button(menu_id)
             return
-        choice = self._choose_offer(offers, screen or QtGui.QCursor.pos())
+        choice = self._choose_offer(menu, direct, offers, screen or QtGui.QCursor.pos())
         if choice == "new":
             self._prompt_add_button(menu_id)
+        elif isinstance(choice, disc_edit.ButtonOffer):
+            self.controller.add_offered_button(menu_id, choice)
         elif choice is not None:
             self.activate_suggestion(choice, screen, dismissable=False)
 
-    def _choose_offer(self, offers: list, screen: QtCore.QPoint):
-        """Zeigt die Angebote von „＋ Button“ und gibt "new", den gewählten Vorschlag oder None zurück."""
+    def _choose_offer(self, menu_node, direct: list, offers: list, screen: QtCore.QPoint):
+        """Zeigt das Angebot von „＋ Button“; gibt "new", einen ButtonOffer, einen Vorschlag oder None zurück."""
         from core import menu_templates as mt
+        from core.disc_rules import target_options
         project = self.controller.project
         lang = ui_language()
         menu = QMenu()
-        menu.addAction(tr("offer_new_button", lang)).setData("new")
+
+        def add(parent: QMenu, text: str, data, present: bool = False):
+            act = parent.addAction(f"{text}   ✓" if present else text)   # ✓: gibt es schon (trotzdem möglich)
+            act.setData(data)
+
+        starts = [o for o in direct if o.kind == BUTTON_NAV]
+        if len(starts) == 1:
+            add(menu, tr("offer_play", lang), starts[0], starts[0].present)
+        elif starts:
+            sub = menu.addMenu(tr("offer_play", lang))
+            for o in starts:
+                add(sub, project.film(o.film_id).name, o, o.present)
+        content = [o for o in direct if o.kind != BUTTON_NAV]
+        films = list(dict.fromkeys(o.film_id for o in content))
+        for film_id in films:
+            film = project.film(film_id)
+            for kind in (BUTTON_AUDIO, BUTTON_SUBTITLE, BUTTON_CHAPTER):
+                items = [o for o in content if o.film_id == film_id and o.kind == kind]
+                if not items:
+                    continue
+                title = tr(f"offer_kind_{kind}", lang)
+                sub = menu.addMenu(f"{title} · {film.name}" if len(films) > 1 else title)
+                names = dict(target_options(film, kind))
+                for o in items:
+                    add(sub, names.get(o.ref, "?"), o, o.present)
         menu.addSeparator()
-        for offer in offers:
-            film = project.film(offer.film_id)
-            if offer.action == mt.ACTION_TITLES_MENU:
-                text = tr("offer_titles", lang)
-            elif offer.action == mt.ACTION_CHAPTER_MENU:
-                text = tr("offer_chapters", lang).format(film=film.name)
-            else:
-                text = tr("offer_language", lang).format(film=film.name)
-            menu.addAction(text).setData(offer)
+        menu.addAction(tr("offer_new_button", lang)).setData("new")
+        if offers:
+            menu.addSeparator()
+            menu.addSection(tr("offer_section_menus", lang))
+            for offer in offers:
+                film = project.film(offer.film_id)
+                if offer.action == mt.ACTION_TITLES_MENU:
+                    text = tr("offer_titles", lang)
+                elif offer.action == mt.ACTION_CHAPTER_MENU:
+                    text = tr("offer_chapters", lang).format(film=film.name)
+                else:
+                    text = tr("offer_language", lang).format(film=film.name)
+                menu.addAction(text).setData(offer)
         chosen = menu.exec(screen)
         return chosen.data() if chosen is not None else None
 

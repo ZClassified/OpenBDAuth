@@ -91,7 +91,7 @@ def build_export_plan(project: DiscProject) -> ExportPlan:
                 for n, button in enumerate(menu.buttons, start=1)
             ]
             _apply_layout(menu, specs)
-            start = start_button_id(menu)          # Standard-Button oder automatisch (v1.14.6)
+            start = start_button_id(project, menu)  # Standard-Button oder automatisch (v1.14.6)
             for button, spec in zip(menu.buttons, specs):
                 spec.is_default = button.id == start
                 if with_2d_choice and starts_3d_film(project, button):
@@ -303,10 +303,12 @@ def _apply_layout(menu: MenuNode, specs: list):
     from modules.igs.layout import MenuLayoutEngine
     from core.menu_layout import button_box
 
-    shape = shape_style(menu.button_style) if menu.button_style.kind == STYLE_SHAPE else None
+    colors = shape_style(menu.button_style)
+    shape = colors if menu.button_style.kind == STYLE_SHAPE else None
     for button, spec in zip(menu.buttons, specs):
         spec.x, spec.y, spec.width, spec.height = button_box(menu, button)
         spec.shape = shape
+        spec.text_colors = None if shape is not None else colors   # Farben gelten auch für Text (v1.35)
     MenuLayoutEngine.link_spatial(specs)
     # Pfeiltasten pro Button überschrieben (Inspektor); Ziele, die es nicht mehr gibt, bleiben automatisch
     number = {b.id: n for n, b in enumerate(menu.buttons, start=1)}

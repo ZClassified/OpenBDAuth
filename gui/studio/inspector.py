@@ -10,11 +10,12 @@ import os
 import re
 from typing import Callable, Optional
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (
     QWidget, QScrollArea, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QFileDialog, QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QComboBox, QFrame, QSpinBox,
+    QCheckBox,
 )
 
 from core import menu_design, menu_templates, disc_edit, node_frames
@@ -519,7 +520,8 @@ class MenuPage(_Page):
     - nichts ausgewählt: das Menü (Name, Standard-Film, Standard-Button, Hintergrund, Button-Stil)
     - ein Button: Typ und Name · Ziel · Form & Position · Fernbedienung (eingeklappt)
     - mehrere Buttons: Film für alle Inhalts-Buttons, gleiche Größe, ausrichten, entfernen
-    - bei einem oder mehreren Buttons oben „Aussehen [ Text | Form ]“: der Stil des ganzen Menüs (v1.14.5)
+    - bei einem oder mehreren Buttons darunter die Karte Button-Stil mit Farben: Man sucht den Stil beim Button, er
+      gilt aber für das ganze Menü, das sagt der Hinweis in der Karte (v1.35; v1.14.5–v1.34 nur „Aussehen“)
     Buttons wählt man im Viewer oder in den Zeilen des Menü-Knotens; die Auswahl teilen sich alle Bereiche.
     """
 
@@ -542,35 +544,6 @@ class MenuPage(_Page):
         bar.addWidget(self.lbl_selection, stretch=1)
         bar.addWidget(self.btn_back)
         layout.addWidget(self.selection_bar)
-
-        # Aussehen bei ausgewählten Buttons (v1.14.5): man sucht den Stil beim Button; er gilt aber fürs Menü
-        self.style_bar = QFrame()
-        self.style_bar.setObjectName("style_bar")
-        self.style_bar.setStyleSheet("QFrame#style_bar { background-color: #1C1C1F; border: 1px solid #27272A;"
-                                     " border-radius: 6px; }")
-        sb = QVBoxLayout(self.style_bar)
-        sb.setContentsMargins(10, 8, 10, 8)
-        sb.setSpacing(4)
-        sb_row = QHBoxLayout()
-        self.lbl_look = QLabel()
-        self.lbl_look.setStyleSheet("color: #D4D4D8; border: none;")
-        self.switch_look = SegmentedSwitch(STYLE_KINDS)
-        self.switch_look.chosen.connect(lambda kind: self.controller.set_button_style(self.node_id, kind=kind))
-        self.btn_look_more = QPushButton()
-        self.btn_look_more.setFlat(True)
-        self.btn_look_more.setCursor(Qt.PointingHandCursor)
-        self.btn_look_more.setStyleSheet("QPushButton { color: #FCD34D; border: none; padding: 2px 4px; }"
-                                         "QPushButton:hover { text-decoration: underline; }")
-        self.btn_look_more.clicked.connect(self._show_style_card)
-        sb_row.addWidget(self.lbl_look)
-        sb_row.addWidget(self.switch_look)
-        sb_row.addStretch(1)
-        sb_row.addWidget(self.btn_look_more)
-        sb.addLayout(sb_row)
-        self.lbl_look_hint = hint_label()
-        self.lbl_look_hint.setStyleSheet(self.lbl_look_hint.styleSheet() + " border: none;")
-        sb.addWidget(self.lbl_look_hint)
-        layout.addWidget(self.style_bar)
 
         # =====================================================================
         # Menü
@@ -662,6 +635,10 @@ class MenuPage(_Page):
         # Button-Stil (v1.11.0): Text wie bisher oder eine Form; die Beschriftung steht dann im Hintergrundbild.
         # Ab v1.14.5 ein Umschalter statt einer Auswahlliste, damit beide Möglichkeiten zu sehen sind.
         self.card_style = DropFrame()
+        self.lbl_style_scope = QLabel()
+        self.lbl_style_scope.setWordWrap(True)
+        self.lbl_style_scope.setStyleSheet("color: #FCD34D;")
+        self.card_style.layout_.addWidget(self.lbl_style_scope)
         self.switch_style = SegmentedSwitch(STYLE_KINDS)
         self.switch_style.chosen.connect(lambda kind: self.controller.set_button_style(self.node_id, kind=kind))
         self.card_style.layout_.addWidget(self.switch_style, alignment=Qt.AlignLeft)
@@ -691,6 +668,10 @@ class MenuPage(_Page):
             size_row.addWidget(w)
         size_row.addStretch(1)
         shape_layout.addLayout(size_row)
+        # Farben gelten ab v1.35 auch für Text-Buttons
+        self.colors_box = QWidget()
+        colors_layout = QVBoxLayout(self.colors_box)
+        colors_layout.setContentsMargins(0, 0, 0, 0)
         self.state_rows = {}
         self.color_tools = {}
         for state in SHAPE_STATES:
@@ -719,10 +700,11 @@ class MenuPage(_Page):
             row.addWidget(hex_edit)
             row.addWidget(pipette)
             row.addWidget(opacity)
-            shape_layout.addLayout(row)
+            colors_layout.addLayout(row)
             self.state_rows[state] = (caption, swatch, opacity)
             self.color_tools[state] = (hex_edit, pipette)
         self.card_style.layout_.addWidget(self.shape_box)
+        self.card_style.layout_.addWidget(self.colors_box)
         layout.addWidget(self.card_style)
 
         # =====================================================================
@@ -753,6 +735,10 @@ class MenuPage(_Page):
         name_row.addWidget(self.edit_button_name, stretch=2)
         name_row.addWidget(self.btn_name_auto)
         self.sec_head.layout_.addLayout(name_row)
+        # v1.35: Start-Button dort festlegen, wo man ihn sucht – beim Button (im Menü als „Standard-Button“)
+        self.check_start = QCheckBox()
+        self.check_start.clicked.connect(self._commit_start_button)
+        self.sec_head.layout_.addWidget(self.check_start)
         self.btn_duplicate = QPushButton()
         self.btn_duplicate.clicked.connect(lambda: self.controller.duplicate_selection(self.node_id))
         self.btn_remove_button = QPushButton()
@@ -1009,7 +995,7 @@ class MenuPage(_Page):
         for combo in self.findChildren(QComboBox):
             combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
             combo.setMinimumContentsLength(6)
-        self.menu_widgets = (self.card, self.card_content, self.card_bg, self.card_style)
+        self.menu_widgets = (self.card, self.card_content, self.card_bg)
         self.button_widgets = (self.sec_head, self.sec_target, self.sec_geometry, self.sec_remote)
         inspector.controller.selection_changed.connect(lambda *_a: self._on_selection())
         inspector.controller.button_selected.connect(lambda *_a: self._on_selection())
@@ -1052,7 +1038,7 @@ class MenuPage(_Page):
         self.film_row.setVisible(len(project.films) > 1)
         _fill_combo(self.combo_default_film, [("", self.t("studio_default_film_none"))] +
                     [(f.id, f.name) for f in project.films], menu.default_film_id)
-        auto = menu.button(menu_design.auto_start_button_id(menu) or "")
+        auto = menu.button(menu_design.auto_start_button_id(project, menu) or "")
         auto_text = self.t("studio_default_button_auto", name=self._button_title(project, menu, auto)) \
             if auto is not None else self.t("studio_default_button_first")
         _fill_combo(self.combo_default_button, [("", auto_text)] +
@@ -1089,7 +1075,6 @@ class MenuPage(_Page):
         self.btn_bg_follow.setVisible(bool(mode) and not follows)
         self.lbl_bg_hint.setText(hint)
         self.lbl_bg_hint.setVisible(bool(hint))
-        self._refresh_style(menu)
 
     @staticmethod
     def _button_title(project, menu, button) -> str:
@@ -1110,6 +1095,10 @@ class MenuPage(_Page):
         auto = button.label is None if button.is_content else \
             button.label == disc_edit.button_label_for(project, button.target)
         self.btn_name_auto.setEnabled(not auto)
+        start = menu_design.start_button_id(project, menu) == button.id
+        self.check_start.setChecked(start)
+        self.check_start.setToolTip(self.t("studio_start_button_tip_auto" if start and not menu.default_button_id
+                                           else "studio_start_button_tip"))
 
         nav = button.kind == BUTTON_NAV
         self.lbl_nav_target.setVisible(nav)
@@ -1158,6 +1147,17 @@ class MenuPage(_Page):
             _fill_combo(combo, entries, button.dpad.get(direction, ""))
             combo.setToolTip(self._button_title(project, menu, menu.button(targets[direction]))
                              if targets.get(direction) in [b.id for b in menu.buttons] else "")
+
+    def _commit_start_button(self, checked: bool):
+        """Haken setzen: dieser Button ist Standard-Button; Haken entfernen: wieder automatisch."""
+        menu, button = self._selected_button()
+        if button is None:
+            return
+        if not checked and menu.default_button_id != button.id:
+            self.check_start.setChecked(True)      # automatisch gewählt: bleibt es, bis ein anderer festgelegt wird
+            return
+        self.controller.set_menu_fields(menu.id, "Standard-Button ändern",
+                                        default_button_id=button.id if checked else None)
 
     def _commit_button_name(self):
         menu, button = self._selected_button()
@@ -1398,11 +1398,6 @@ class MenuPage(_Page):
                 hex_edit.setText(getattr(style, f"color_{state}").upper())
 
     # --- Eigene Farben (v1.14.4) -------------------------------------------------------
-    def _show_style_card(self):
-        """„Form & Farben …“ (v1.14.5): Button-Auswahl aufheben und zur Karte Button-Stil des Menüs springen."""
-        self.controller.select_button(None, None)
-        QTimer.singleShot(0, lambda: self.inspector.ensureWidgetVisible(self.card_style, 0, 0))
-
     def _color_sections(self):
         """Zusätzliche Abschnitte im Farbmenü: im Projekt benutzte Farben, Hauptfarben des Hintergrunds."""
         from core import color_tools
@@ -1456,6 +1451,16 @@ class MenuPage(_Page):
                                             duration=float(self.spin_duration.value()))
 
     # --- Aufbau nach Auswahl -----------------------------------------------------------
+    def _place_style_card(self):
+        """Button-Stil im Menü nach dem Hintergrund, bei Buttons nach deren eigenen Angaben (vor der Fernbedienung
+        bzw. nach der Mehrfach-Auswahl)."""
+        layout = self.layout()
+        anchor = {MODE_MENU: self.card_bg, MODE_BUTTON: self.sec_geometry}.get(self.mode, self.card_multi)
+        index = layout.indexOf(anchor) + 1
+        if layout.indexOf(self.card_style) != index:
+            layout.removeWidget(self.card_style)
+            layout.insertWidget(layout.indexOf(anchor) + 1, self.card_style)
+
     def refresh(self):
         project = self.controller.project
         menu, buttons = self._selection()
@@ -1469,12 +1474,13 @@ class MenuPage(_Page):
             w.setVisible(self.mode == MODE_BUTTON)
         self.card_multi.setVisible(self.mode == MODE_MULTI)
         self.selection_bar.setVisible(self.mode != MODE_MENU)
-        self.style_bar.setVisible(self.mode != MODE_MENU)
+        self._place_style_card()
+        self.lbl_style_scope.setText(self.t("studio_look_hint", menu=menu.name))
+        self.lbl_style_scope.setVisible(self.mode != MODE_MENU)
+        self._refresh_style(menu)
         if self.mode == MODE_MENU:
             self._refresh_menu(project, menu)
             return
-        self.switch_look.set_value(menu.button_style.kind)
-        self.lbl_look_hint.setText(self.t("studio_look_hint", menu=menu.name))
         if self.mode == MODE_BUTTON:
             self._refresh_button(project, menu, buttons[0])
         else:
@@ -1500,11 +1506,7 @@ class MenuPage(_Page):
         self.card_style.set_title(self.t("studio_section_style"))
         texts = {k: self.t(f"studio_style_{k}_short") for k in STYLE_KINDS}
         tips = {k: self.t(f"studio_style_{k}") for k in STYLE_KINDS}
-        for switch in (self.switch_style, self.switch_look):
-            switch.set_texts(texts, tips)
-        self.lbl_look.setText(self.t("studio_look"))
-        self.btn_look_more.setText(self.t("studio_look_more").replace("&", "&&"))   # kein Tastenkürzel
-        self.btn_look_more.setToolTip(self.t("studio_look_more_tip"))
+        self.switch_style.set_texts(texts, tips)
         for i, shape in enumerate(SHAPES):
             self.combo_shape.setItemText(i, self.t(f"studio_shape_{shape}"))
         self.lbl_shape_w.setText(self.t("studio_shape_width"))
@@ -1523,6 +1525,7 @@ class MenuPage(_Page):
         self.lbl_kind.setText(self.t("studio_button_kind"))
         self.lbl_button_name.setText(self.t("studio_button_label"))
         self.btn_name_auto.setToolTip(self.t("studio_button_name_auto"))
+        self.check_start.setText(self.t("studio_start_button"))
         self.btn_remove_button.setText(self.t("studio_remove_button"))
         self.btn_duplicate.setText(self.t("studio_duplicate"))
         self.btn_duplicate_many.setText(self.t("studio_duplicate"))

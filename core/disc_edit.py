@@ -5,6 +5,7 @@ innerhalb rückgängig machbarer Schritte auf.
 """
 
 import copy
+from dataclasses import dataclass
 from typing import Iterable, List, Optional, Tuple, Union
 
 from core.disc_model import (
@@ -220,6 +221,57 @@ def add_button_of_kind(project: DiscProject, menu_id: str, kind: str, center: Op
         x = max(0, min(menu_layout.CANVAS_W - w, int(round(center[0] - w / 2))))
         y = max(0, min(menu_layout.CANVAS_H - h, int(round(center[1] - h / 2))))
         button.position = [x, y]
+    return add_button(menu, button)
+
+
+@dataclass(frozen=True)
+class ButtonOffer:
+    """
+    Ein fertiger Button, den „＋ Button“ im Menü-Knoten direkt anbietet (v1.35): „Film starten“ (Navigation zum
+    Film) oder ein Inhalt (Kapitel, Tonspur, Untertitel, „Untertitel aus“). present: gibt es im Menü schon.
+    """
+    kind: str
+    film_id: str
+    ref: Optional[str] = None
+    present: bool = False
+
+
+def button_offers_direct(project: DiscProject, menu: MenuNode) -> List[ButtonOffer]:
+    """
+    Fertige Buttons für dieses Menü: „Film starten“ für jeden Film, dazu Kapitel, Ton und Untertitel des
+    Standard-Films (ohne Standard-Film aller Filme). Dasselbe, was die Leiste über dem Viewer anlegt, aber mit
+    dem Ziel schon gewählt.
+    """
+    offers = []
+    started = {b.target for b in menu.buttons if b.kind == BUTTON_NAV}
+    for film in project.films:
+        if check_connection(project, Source.new_button(menu.id), film.id).allowed:
+            offers.append(ButtonOffer(BUTTON_NAV, film.id, present=film.id in started))
+    chosen = default_film(project, menu)
+    for film in [chosen] if chosen is not None else project.films:
+        for kind in (BUTTON_AUDIO, BUTTON_SUBTITLE, BUTTON_CHAPTER):
+            used = {b.content_ref for b in menu.buttons if b.kind == kind and b.film_id == film.id}
+            refs = [item.id for item in _items_of(film, kind)]
+            if kind == BUTTON_SUBTITLE and refs:
+                refs.append(SUBTITLE_OFF)
+            offers.extend(ButtonOffer(kind, film.id, ref, ref in used) for ref in refs)
+    return offers
+
+
+def add_offered_button(project: DiscProject, menu_id: str, offer: ButtonOffer,
+                       button_id: Optional[str] = None) -> Optional[MenuButton]:
+    """Button aus button_offers_direct anlegen: „Film starten“ verbunden und beschriftet, Inhalt mit Ziel und
+    automatischer Beschriftung; Platz wie bei jedem neuen Button."""
+    menu = project.menu(menu_id)
+    if menu is None or project.film(offer.film_id) is None:
+        return None
+    if offer.kind == BUTTON_NAV:
+        if not check_connection(project, Source.new_button(menu_id), offer.film_id).allowed:
+            return None
+        label = disc_label("FILM STARTEN", project.settings.app_lang) if len(project.films) == 1             else button_label_for(project, offer.film_id)
+        return add_nav_button(project, menu_id, label, offer.film_id, button_id=button_id)
+    button = MenuButton(id=button_id or new_id("btn"), kind=offer.kind, film_id=offer.film_id,
+                        content_ref=offer.ref)
     return add_button(menu, button)
 
 
