@@ -70,6 +70,49 @@ Disc-Typ umgestellt, während schon unpassende Filme im Projekt sind, sagt ein H
 
 **Export und Brennen:** Hinweis „Diese Disc spielt nur auf UHD-Playern“, bevor gebrannt wird.
 
+### Datenrate
+
+Gebrannt wird voraussichtlich auf BD-25 oder BD-50, also mit deutlich weniger Platz als bei gepressten UHD-Discs
+(BD-66/100). Deshalb wählt der User die Datenrate **bewusst aus festen Stufen**; es gibt **keine Automatik**, die
+die Rate so weit senkt, bis der Film passt (ein 2-Stunden-Film auf BD-25 ergäbe sonst unbemerkt eine viel zu
+niedrige Rate).
+
+**Stufen je Auftrag (mittlere Datenrate des Videos; Annahmen, geprüft in Phase 0.10 und 0.11):**
+
+| Auflösung | Stufen (Ø Mbit/s) | Vorgabe |
+|---|---|---|
+| 2160p | 60 · 45 · 35 · 25 | 45 |
+| 1080p HEVC (z. B. Extras auf einer UHD-Disc) | 20 · 15 · 10 | 15 |
+
+- Angeboten werden **nur Stufen, die auf BD-25 und BD-50 sicher gehen**: Mittlere Rate plus Ton bleibt mit Abstand
+  unter der Spitzenrate, die der Player von einem gebrannten Rohling liest. Zeigt Phase 0.10 eine niedrigere Grenze,
+  werden die Stufen gesenkt. Unter 25 Mbit/s gibt es für 2160p keine Stufe; dafür ist 1080p der bessere Weg.
+- **Jede Stufe zeigt, wie viel Film damit auf die gewählte Disc passt**, gerechnet aus Disc-Größe minus Ton, Menüs
+  und Reserve:
+
+  ```
+  Datenrate   [ 45 Mbit/s – passt bis ca. 2 h 15 min auf BD-50 ▾ ]
+                60 Mbit/s – passt bis ca. 1 h 40 min
+                45 Mbit/s – passt bis ca. 2 h 15 min
+                35 Mbit/s – passt bis ca. 2 h 55 min
+                25 Mbit/s – passt bis ca. 4 h 00 min
+  ```
+
+- Passt der Film mit der gewählten Stufe nicht, steht darunter der Ausweg („Passt nicht auf BD-25. Mit 25 Mbit/s
+  oder auf BD-50 passt es.“). Gewählt wird nichts automatisch; Füllanzeige und Vorprüfung blockieren wie heute.
+- **Die Spitzenrate** (HRD/VBV: `vbv-maxrate`, `vbv-bufsize`) legt das Programm je Disc-Größe fest, nicht der User.
+  Annahme: 80 Mbit/s für den ganzen Transportstrom (zu prüfen, Phase 0.10).
+
+**Kodierung: zwei Wege, der User wählt je Auftrag.**
+
+| Weg | Ablauf | Größe | Wofür |
+|---|---|---|---|
+| Genau (Vorgabe) | zwei Durchläufe mit Ziel-Datenrate | trifft die Stufe | Spielfilm, Disc wird voll |
+| Schnell | ein Durchlauf mit Ziel-Datenrate | ungefähr (Annahme ±10 %) | Kurzfilm, Platz reicht sicher |
+
+Beide halten die Spitzenrate ein. Bei „Schnell“ rechnet die Füllanzeige mit Aufschlag und zeigt die Größe als
+geschätzt; nach der Kodierung gilt die echte Größe.
+
 ### Nicht im Umfang
 
 - **Dolby Vision:** lizenzpflichtig, braucht Profil 7 (zwei Ebenen) und proprietäre Werkzeuge.
@@ -104,6 +147,8 @@ nur die technischen Angaben (Codec, Auflösung, Bildrate, Dynamikbereich, Metada
 | 0.7 | Wie verhalten sich Menüs auf HDR? | (a) SDR-Menü, dann HDR-Film: schaltet der Fernseher um, wie lange ist er schwarz? (b) HDR10-Menü mit Grafik in verschiedenen Helligkeiten der Palette. (c) Pop-up über HDR-Film. (d) PG-Untertitel über HDR-Film. Ergebnis: Helligkeit, die für Weiß in der Grafik gilt (zu prüfen: wie der Player SDR-Grafik auf PQ abbildet, ob die Palette BT.2020 sein kann) |
 | 0.8 | Dürfen HD-Filme auf einer UHD-Disc liegen, und in welchem Format? | Disc aus 0.2 um einen 1080p-Film ergänzen, einmal als H.264, einmal als HEVC. Spielt der X700 beide, auch per Menü-Sprung? Gegenlesen mit libbluray/tsMuxeR, ob H.264 auf `0300`-Discs vorgesehen ist. Ergebnis bestimmt, ob fertige HD-Extras unverändert übernommen werden können oder nach HEVC kodiert werden müssen |
 | 0.9 | HDR- und SDR-Filme auf einer Disc? | HDR10-Film und SDR-Film auf derselben Disc mit Menü. Wie lange ist der Fernseher beim Wechsel schwarz? In welchem Dynamikbereich wirkt das Menü bei beiden Filmen gut? Ergebnis: ob Mischen angeboten wird und welchem Film das Menü folgt |
+| 0.10 | Welche Spitzenrate liest der X700 ruckelfrei von gebrannten Rohlingen? | Testclips mit viel Bewegung und Korn, Spitzen 50 / 70 / 82 Mbit/s (gesamter Strom), je auf BD-R 25 und BD-R 50. Prüfen: läuft ohne Ruckeln und Aussetzer, auch beim Springen zwischen Kapiteln. Ergebnis: Spitzenrate des Programms (mit Abstand zur Grenze) und welche Stufen angeboten werden |
+| 0.11 | Welche Datenrate reicht wofür? | Eigenes Material in 18 / 25 / 35 / 45 / 60 Mbit/s (2160p) und 10 / 15 / 20 Mbit/s (1080p HEVC), am 4K-Fernseher verglichen, ruhige Szenen und Szenen mit Korn/Rauschen. Ergebnis: Stufen und Vorgabe bestätigen oder anpassen; jeweils „Genau“ und „Schnell“ (Abweichung der Größe) |
 
 **Entscheidung nach Phase 0:**
 
@@ -177,8 +222,8 @@ werden, und die Farbkennzeichnung muss immer ausdrücklich übergeben werden.
 - Neues x265-Profil in `modules/prepare/jobs.py`: `--uhd-bd` als Grundlage, Main10, HRD, AUD, wiederholte Header,
   GOP nach Bildrate, Farbkennzeichnung, bei HDR10 `--master-display` und `--max-cll` aus dem Projekt.
   Nur Software-x265, keine Hardware-Encoder (halten die Regeln nicht verlässlich ein).
-- Zwei Durchläufe oder CRF mit Obergrenze, abgestimmt auf die Bitraten-Grenze der gewählten Disc-Größe; die
-  Füllanzeige rechnet mit.
+- Datenrate als feste Stufe des Auftrags, Kodierung „Genau“ (zwei Durchläufe) oder „Schnell“ (ein Durchlauf),
+  beide mit der Spitzenrate der Disc-Größe (siehe „Datenrate“). Die Füllanzeige rechnet mit.
 - Prüfen, ob die mitgelieferte ffmpeg-Version (`tools/fetch_tools.py`) auf allen drei Systemen `libx265` mit 10 Bit
   enthält. Sonst x265 als eigenes Werkzeug mitliefern. Windows: ja (ffmpeg 9.0.2 essentials, x265 4.3, 8/10/12 Bit).
   Linux und macOS: offen, zeigt ein CI-Lauf von `feature/uhd` (die x265-Tests werden sonst übersprungen).
@@ -267,6 +312,7 @@ Erst wenn alles besteht, wird `feature/uhd` in `main` übernommen und als eine V
 8. BDXL unter IMAPI2, macOS und Linux; Profil und Abschluss bei BD-R XL.
 9. Enthält die mitgelieferte ffmpeg-Version auf allen Systemen `libx265` mit 10 Bit? Windows: ja; Linux/macOS: CI-Lauf.
 10. HDR- und SDR-Filme auf einer Disc: Umschalten des Fernsehers, Dynamikbereich der Menüs (0.9).
+11. Spitzenrate von gebrannten BD-R 25/50 im Player und Stufen der Datenrate (0.10, 0.11).
 
 ## Anhang A – Feldliste Version 3
 
