@@ -417,6 +417,7 @@ def _build_project_state(project: DiscProject, main: Optional[MenuNode]):
     state.menu_no_buttons_test = s.menu_no_buttons_test
     state.menu_resume = s.menu_resume
     state.enable_menu = main is not None
+    state.uhd = s.is_uhd                 # UHD-Plan: vorerst nur ohne Menü, tsMuxeR schreibt die Disc (--blu-ray-v3)
     if main is not None:
         # Stufe 1: alle Menüs teilen den Hintergrund des Hauptmenüs
         state.menu_bg_image = main.background.image

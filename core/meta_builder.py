@@ -4,6 +4,7 @@ import re
 import tempfile
 from typing import Optional
 from modules.subtitles.srt_to_sup import convert_srt_to_sup
+from core.disc_model import HEVC_EXTENSIONS
 
 class MetaBuilder:
     def __init__(self, project_state):
@@ -109,7 +110,8 @@ class MetaBuilder:
 
     def generate_title_meta_content(self, title, sup_dir: Optional[str] = None) -> str:
         lines = []
-        muxopt = "MUXOPT --blu-ray"
+        # Ultra HD Blu-ray (UHD-Plan): tsMuxeR schreibt die Disc in Version 3 (index, MovieObject, Playlist, Clip)
+        muxopt = "MUXOPT --blu-ray-v3" if getattr(self.state, "uhd", False) else "MUXOPT --blu-ray"
         
         # Disc-Name (Label) hinzufügen
         if getattr(self.state, "project_name", None):
@@ -132,7 +134,11 @@ class MetaBuilder:
         # 1. HAUPT-VIDEO (Track 1)
         if video_path:
             base_path = self._format_path(video_path)
-            lines.append(f'V_MPEG4/ISO/AVC, "{base_path}", fps={fps_str}, insertSEI, contSPS')
+            if video_path.lower().endswith(HEVC_EXTENSIONS):
+                # HEVC (Ultra HD): insertSEI/contSPS gelten nur für H.264; HDR10 erkennt tsMuxeR aus den SEI
+                lines.append(f'V_MPEGH/ISO/HEVC, "{base_path}", fps={fps_str}')
+            else:
+                lines.append(f'V_MPEG4/ISO/AVC, "{base_path}", fps={fps_str}, insertSEI, contSPS')
         
         # 2. 3D-ERWEITERUNG (Track 2)
         if getattr(title, "video_mvc", None):

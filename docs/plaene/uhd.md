@@ -182,6 +182,14 @@ Vorbereiten, Vorprüfung (3D auf UHD und HEVC auf Blu-ray: Fehler; H.264 auf UHD
 Phase 4 fehlt, sperrt die Vorprüfung den Export einer UHD-Disc. Disc-Größen bei UHD vorerst BD-25 und BD-50;
 BD-66/BD-100 kommen mit BDXL (Phase 6). Tests: `tests/test_disc_type.py`.
 
+**Stand (2026-11-24, `feature/uhd`): Disc ohne Menü exportierbar** (Zwischenschritt vor Phase 4). Ist der Disc-Typ
+UHD, führt der Start-Knoten direkt auf den einzigen Film und gibt es kein Hauptmenü, schreibt tsMuxeR die ganze Disc
+selbst (`MUXOPT --blu-ray-v3`, Spur `V_MPEGH/ISO/HEVC`): `index.bdmv`, `MovieObject.bdmv`, Playlist und Clip-Info in
+Version 3 (`INDX0300`, `MOBJ0300`, `MPLS0300`, `HDMV0300`), als Ordner oder direkt als ISO. Ausgelassen bei UHD: der
+1080i-Patch (nur H.264) und der Disc-Simulator (liest Version 3 noch nicht, Phase 7). Mit Menü oder mehreren Filmen
+sperrt die Vorprüfung weiter. Damit lässt sich Phase 0.2/0.3 über den normalen Ablauf der App testen, und die
+Dateien von tsMuxeR sind die Vorlage für die Feldliste (0.4). Tests: `tests/test_uhd_export.py`.
+
 ## Phase 2 – Anlieferung und Prüfung des Materials
 
 Zwei Wege, beide fest beschrieben (Spezifikation für User in README und in der Oberfläche):

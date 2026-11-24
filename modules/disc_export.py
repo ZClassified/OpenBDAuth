@@ -100,6 +100,8 @@ def export_disc(
             t0 = titles[0] if titles else project
             if getattr(t0, "video_mvc", None):
                 log(tr("log_3d_direct_iso"))
+            elif getattr(project, "uhd", False):
+                log(tr("log_uhd_direct", project.app_lang))
             else:
                 log("⚡ Direkt-Export: tsMuxeR erzeugt UDF 2.50 ISO direkt...")
         else:
@@ -143,6 +145,8 @@ def export_disc(
             return False, err_msg
 
         if direct_iso_mode:
+            if getattr(project, "uhd", False):
+                log(tr("log_uhd_no_simulation", project.app_lang))
             if getattr(project, "disc_title_meta", False):
                 log(tr("log_disc_title_direct_iso", project.app_lang))
             log(tr("log_iso_success", project.app_lang).format(path=mux_dest))
@@ -279,12 +283,14 @@ def export_disc(
             inject_menu_into_bdmv(bdmv_dir=bdmv_dir, **menu_injection_args(project, pages_specs))
             log(tr("log_menu_success", project.app_lang))
 
-        # 2.5 BD-ROM Part 3 Stream-Attribut-Patch (1080i Hardware-Player Compliance)
-        from modules.mux_engine import fix_1080i_stream_attributes
+        # 2.5 BD-ROM Part 3 Stream-Attribut-Patch (1080i Hardware-Player Compliance) – nur Blu-ray (H.264)
+        uhd = getattr(project, "uhd", False)
         bdmv_dir = os.path.join(dest, "BDMV")
-        patched_headers = fix_1080i_stream_attributes(bdmv_dir)
-        if patched_headers > 0:
-            log(f"BD-ROM Part 3 Stream-Attribute optimiert ({patched_headers} Header korrigiert)")
+        if not uhd:
+            from modules.mux_engine import fix_1080i_stream_attributes
+            patched_headers = fix_1080i_stream_attributes(bdmv_dir)
+            if patched_headers > 0:
+                log(f"BD-ROM Part 3 Stream-Attribute optimiert ({patched_headers} Header korrigiert)")
 
         # 2.6 Disc-Titel für den Player (BDMV/META/DL/bdmt_*.xml), nur auf Wunsch
         if getattr(project, "disc_title_meta", False):
@@ -293,7 +299,9 @@ def export_disc(
             write_disc_title_meta(bdmv_dir, title)
             log(tr("log_disc_title", project.app_lang).format(name=title))
 
-        if on_disc_ready is not None:
+        if uhd:
+            log(tr("log_uhd_no_simulation", project.app_lang))   # der Simulator liest Version 3 noch nicht
+        elif on_disc_ready is not None:
             try:
                 on_disc_ready(dest)
             except Exception as ex:

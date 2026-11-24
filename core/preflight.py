@@ -87,8 +87,10 @@ def run_preflight(project: DiscProject, check_files: bool = True) -> List[Issue]
             # bis Phase 0.9 klärt, wie Fernseher und Menüs den Wechsel vertragen
             add(ERROR, tr("pf_uhd_mixed_range", ranges=", ".join(tr(f"uhd_range_{r}") for r in sorted(ranges))),
                 START_NODE_ID)
-        # vorläufig (feature/uhd): Disc-Struktur Version 3 folgt in Phase 4
-        add(ERROR, tr("pf_uhd_not_ready"), START_NODE_ID)
+        # vorläufig (feature/uhd): eigene Disc-Struktur Version 3 (Menüs, mehrere Filme) folgt in Phase 4. Ohne Menü
+        # mit einem Film schreibt tsMuxeR die Disc selbst (--blu-ray-v3).
+        if project.main_menu is not None or len(project.films) > 1:
+            add(ERROR, tr("pf_uhd_not_ready"), START_NODE_ID)
 
     if project.main_menu is not None:
         for cycle in film_cycles(project):
