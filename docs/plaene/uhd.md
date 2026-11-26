@@ -6,7 +6,7 @@ danach fällt die Entscheidung, ob UHD gebaut wird.
 ## Ziel und Grundsätze
 
 OpenBDAuth erstellt **vollwertige UHD-Blu-rays**: 2160p HEVC in SDR und HDR10, mit HDMV-Menüs (Hauptmenü, Seiten,
-Kapitel-, Ton- und Untertitelmenü, Pop-up). Das ist derselbe Funktionsumfang wie heute bei 2D.
+Kapitel-, Ton- und Untertitelmenü). Das ist derselbe Funktionsumfang wie heute bei 2D.
 
 - **Ganz oder gar nicht.** UHD erscheint erst in einem Release, wenn alles aus „Umfang“ fertig und auf Hardware
   geprüft ist. Bis dahin wird auf einem eigenen Branch entwickelt (`feature/uhd`), ohne halbe Zwischenstände in `main`.
@@ -35,7 +35,7 @@ Kapitel-, Ton- und Untertitelmenü, Pop-up). Das ist derselbe Funktionsumfang wi
 | Anlieferung | Mezzanine (ProRes, DNxHR) oder fertig kodierter HEVC-Strom, siehe Phase 2 |
 | Ton | wie heute (AC-3, DTS, LPCM, TrueHD und DTS-HD durchgereicht, Atmos und DTS:X im Kern-Strom enthalten) |
 | Untertitel | PG in 1080, auf HDR-Filmen in korrekter Helligkeit |
-| Menüs | HDMV/IGS wie heute; Hintergrund als HEVC im Dynamikbereich des Films; Pop-up über HDR-Video |
+| Menüs | HDMV/IGS wie heute; Hintergrund als HEVC im Dynamikbereich des Films |
 | Disc-Struktur | `index.bdmv`, `MovieObject.bdmv`, `.mpls`, `.clpi` in Version 3 (`0300`) mit UHD-Zusatzdaten |
 | Kapazität | BD-50, BD-66, BD-100 mit den jeweiligen Bitraten-Grenzen; BD-25 zu prüfen |
 | Simulator | liest UHD-Discs, Vorschau von HDR auf SDR heruntergerechnet |
@@ -121,6 +121,8 @@ geschätzt; nach der Kodierung gilt die echte Größe.
 - **BD-J (Java-Menüs):** eigenes Projekt in der Größe von OpenBDAuth. HDMV ist auf UHD-Discs ein übliches,
   vollwertiges Menüsystem.
 - **AACS 2.0:** Kopierschutz für gepresste Discs. Selbst gebrannte Discs bleiben unverschlüsselt (siehe Phase 0).
+- **Pop-up-Menüs:** gibt es heute auch bei 2D nicht (OpenBDAuth schreibt nur Always-On-Menüs). Später als eigene
+  Funktion für 2D, 3D und UHD denkbar; die Helligkeit über HDR-Video wäre dann mit zu prüfen.
 
 ---
 
@@ -144,7 +146,7 @@ nur die technischen Angaben (Codec, Auflösung, Bildrate, Dynamikbereich, Metada
 | 0.4 | Wie sieht eine UHD-Disc von tsMuxeR genau aus? | `index.bdmv`, `MovieObject.bdmv`, `.mpls`, `.clpi` aus 0.2 zerlegen und mit libbluray (`index_parse.c`, `mpls_parse.c`, `clpi_parse.c`) gegenlesen. Ergebnis: Feldliste in Anhang A |
 | 0.5 | Funktioniert **unser HDMV-Menü** auf einer UHD-Disc? | Disc aus 0.2, von Hand ergänzt: IGS-Menü aus OpenBDAuth, Playlist und Clip-Infos auf `0300` gesetzt, Hintergrund als HEVC. Zwei Varianten: Hintergrund 2160p und 1080p |
 | 0.6 | Ist H.264 als Menü-Hintergrund auf einer UHD-Disc erlaubt? | Variante von 0.5 mit dem heutigen H.264-Hintergrund. Klappt das nicht oder ist es laut libbluray/tsMuxeR nicht vorgesehen, wird der Hintergrund immer HEVC |
-| 0.7 | Wie verhalten sich Menüs auf HDR? | (a) SDR-Menü, dann HDR-Film: schaltet der Fernseher um, wie lange ist er schwarz? (b) HDR10-Menü mit Grafik in verschiedenen Helligkeiten der Palette. (c) Pop-up über HDR-Film. (d) PG-Untertitel über HDR-Film. Ergebnis: Helligkeit, die für Weiß in der Grafik gilt (zu prüfen: wie der Player SDR-Grafik auf PQ abbildet, ob die Palette BT.2020 sein kann) |
+| 0.7 | Wie verhalten sich Menüs auf HDR? | (a) SDR-Menü, dann HDR-Film: schaltet der Fernseher um, wie lange ist er schwarz? (b) HDR10-Menü mit Grafik in verschiedenen Helligkeiten der Palette. (c) PG-Untertitel über HDR-Film. Ergebnis: Helligkeit, die für Weiß in der Grafik gilt (zu prüfen: wie der Player SDR-Grafik auf PQ abbildet, ob die Palette BT.2020 sein kann) |
 | 0.8 | Dürfen HD-Filme auf einer UHD-Disc liegen, und in welchem Format? | Disc aus 0.2 um einen 1080p-Film ergänzen, einmal als H.264, einmal als HEVC. Spielt der X700 beide, auch per Menü-Sprung? Gegenlesen mit libbluray/tsMuxeR, ob H.264 auf `0300`-Discs vorgesehen ist. Ergebnis bestimmt, ob fertige HD-Extras unverändert übernommen werden können oder nach HEVC kodiert werden müssen |
 | 0.9 | HDR- und SDR-Filme auf einer Disc? | HDR10-Film und SDR-Film auf derselben Disc mit Menü. Wie lange ist der Fernseher beim Wechsel schwarz? In welchem Dynamikbereich wirkt das Menü bei beiden Filmen gut? Ergebnis: ob Mischen angeboten wird und welchem Film das Menü folgt |
 | 0.10 | Welche Spitzenrate liest der X700 ruckelfrei von gebrannten Rohlingen? | Testclips mit viel Bewegung und Korn, Spitzen 50 / 70 / 82 Mbit/s (gesamter Strom), je auf BD-R 25 und BD-R 50. Prüfen: läuft ohne Ruckeln und Aussetzer, auch beim Springen zwischen Kapiteln. Ergebnis: Spitzenrate des Programms (mit Abstand zur Grenze) und welche Stufen angeboten werden |
@@ -339,11 +341,11 @@ das ab). Die Feldliste aus Anhang A (Phase 0.4) ist die Vorlage.
 
 Auf dem X700 am HDR-Fernseher, mit dem eigenen Testmaterial aus Phase 0, eingetragen in `HARDWARE_TESTS.md`:
 
-- je eine Disc in SDR BT.709, SDR BT.2020 und HDR10, jeweils mit Menü (Seiten, Kapitel, Ton, Untertitel, Pop-up)
+- je eine Disc in SDR BT.709, SDR BT.2020 und HDR10, jeweils mit Menü (Seiten, Kapitel, Ton, Untertitel)
 - Weg A (Mezzanine) und Weg B (fertiger HEVC-Strom)
 - BD-50 und BD-66 oder BD-100 (gebrannt mit OpenBDAuth)
 - mehrere Filme auf einer Disc, Wechsel Menü ↔ Film ohne Umschalten des Fernsehers
-- Untertitel und Pop-up über HDR in angenehmer Helligkeit
+- Untertitel über HDR in angenehmer Helligkeit
 - Disc gegen ISO geprüft
 - nach Möglichkeit ein zweiter UHD-Player einer anderen Marke
 
