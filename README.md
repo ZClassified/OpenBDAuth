@@ -7,7 +7,7 @@
 [![Platform Windows | Linux | macOS](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078D6)](#platforms)
 [![Download](https://img.shields.io/badge/Download-Releases-2EA44F)](../../releases/latest)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![License GPL v3](https://img.shields.io/badge/License-GPL%20v3-007EC6)](LICENSE)
+[![License Apache 2.0 + Commons Clause](https://img.shields.io/badge/License-Apache%202.0%20%2B%20Commons%20Clause-007EC6)](LICENSE)
 
 [![GUI: desktop app](https://img.shields.io/badge/GUI-desktop%20app-2EA44F)](#features)
 [![Blu-ray 2D + 3D (MVC)](https://img.shields.io/badge/Blu--ray-2D%20%2B%203D%20%28MVC%29-2EA44F)](#features)
@@ -206,7 +206,8 @@ The documentation files are currently in German.
 
 ## Legal
 
-- **License:** GPL-3.0 ([LICENSE](LICENSE)). Bundled third-party components (FFmpeg with x264, tsMuxeR, Qt, Pillow, Python, fonts) are under their own licenses, see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+- **License:** Apache License 2.0 with the Commons Clause ([LICENSE](LICENSE)). You may use OpenBDAuth for free, also commercially, and sell the discs you make with it. You may not sell OpenBDAuth itself, a modified version of it, or parts of it. Versions up to and including 1.36.0 were released under GPL-3.0 and stay available under it. Bundled third-party components (FFmpeg with x264, tsMuxeR, Qt, Pillow, Python, fonts) are under their own licenses, see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+- **Why "Open"?** The source code is open, and OpenBDAuth is free – for everyone, for good. You may read it, change it and share it. The only thing nobody may do is sell it. That is why OpenBDAuth is formally "source available" rather than "open source" as defined by the OSI.
 - **No copy protection:** OpenBDAuth creates discs from your own material. It does not circumvent copy protection and does not decrypt content.
 - **Patents:** H.264 and MVC are covered by patents in some countries. If you distribute discs commercially, check the situation for your country.
 
