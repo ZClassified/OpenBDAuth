@@ -14,10 +14,11 @@ Licensor: ZClassified (https://github.com/ZClassified)
 
 -------------------------------------------------------------------------------
 
-Clarification by the Licensor
+Clarification and additional condition by the Licensor
 
-This clarification is not part of the Commons Clause text above. It explains how the Licensor
-interprets "Sell" for this Software.
+This section is not part of the Commons Clause text above. Points 1 and 2 explain how the
+Licensor interprets "Sell" for this Software. Point 3 is an additional condition that applies
+on top of the Commons Clause and the License.
 
 1. Output is free to use. Blu-ray discs, disc images, films, menus, subtitles and any other
    output created with the Software may be used, sold and distributed by anyone, including
@@ -27,12 +28,15 @@ interprets "Sell" for this Software.
    Software, also commercially, for example to author discs for their own films or for paying
    clients.
 
-3. Not allowed without written permission from the Licensor: selling, renting or licensing the
-   Software itself, a modified version of it, or any part of it,
-   for a fee or other consideration, on its own or bundled with other products or services.
+3. Additional condition: Without written permission from the Licensor, you may not sell, rent
+   or license, for a fee or other consideration, the Software itself, a modified version of it,
+   or any part of it, on its own or bundled with other products or services. "Part" means
+   source code or compiled code taken from the Software, regardless of how much of the value
+   of the product or service derives from it. Distributing the Software or parts of it free of
+   charge under the License remains allowed.
 
-4. Versions of OpenBDAuth released before this license took effect remain available under
-   the GNU General Public License, Version 3, under which they were released.
+4. Versions of OpenBDAuth up to and including 1.36.0 were released under the GNU General
+   Public License, Version 3, and remain available under it.
 
 Third-party components bundled with OpenBDAuth (for example FFmpeg, tsMuxeR, Qt) are not covered
 by this license. They remain under their own licenses; see THIRD_PARTY_LICENSES.md.
