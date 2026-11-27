@@ -5,6 +5,14 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Neue Lizenz
+
+- **Lizenz:** OpenBDAuth steht ab der nächsten Version unter der Apache License 2.0 mit Commons Clause statt unter GPL-3.0 (`LICENSE`). Nutzen bleibt kostenlos und auch kommerziell erlaubt, ebenso der Verkauf der erstellten Discs; das Programm selbst, veränderte Versionen oder Teile davon dürfen nicht verkauft werden. Versionen bis einschließlich 1.36.0 bleiben unter GPL-3.0.
+- **README:** Lizenz-Badge, Abschnitt „Rechtliches“ bzw. „Legal“ und neuer Absatz „Warum Open?“.
+- Fremdkomponenten (FFmpeg mit x264, tsMuxeR, Qt, Pillow, Python, Schriften) behalten ihre eigenen Lizenzen; `licenses/` und `THIRD_PARTY_LICENSES.md` bleiben unverändert.
+
 ## [1.36.0] - 2026-11-24
 
 ### Disc-Größe im Start-Knoten

@@ -7,7 +7,7 @@
 [![Plattform Windows | Linux | macOS](https://img.shields.io/badge/Plattform-Windows%20%7C%20Linux%20%7C%20macOS-0078D6)](#plattformen)
 [![Download](https://img.shields.io/badge/Download-Releases-2EA44F)](../../releases/latest)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Lizenz GPL v3](https://img.shields.io/badge/Lizenz-GPL%20v3-007EC6)](LICENSE)
+[![Lizenz Apache 2.0 + Commons Clause](https://img.shields.io/badge/Lizenz-Apache%202.0%20%2B%20Commons%20Clause-007EC6)](LICENSE)
 
 [![Oberfläche: Desktop-Programm](https://img.shields.io/badge/Oberfl%C3%A4che-Desktop--Programm-2EA44F)](#funktionen)
 [![Blu-ray 2D + 3D (MVC)](https://img.shields.io/badge/Blu--ray-2D%20%2B%203D%20%28MVC%29-2EA44F)](#funktionen)
@@ -204,7 +204,8 @@ Ein Teil der Tests braucht ffmpeg mit libx264 und tsMuxeR (sonst übersprungen).
 
 ## Rechtliches
 
-- **Lizenz:** GPL-3.0 ([LICENSE](LICENSE)). Mitgelieferte Fremdkomponenten (FFmpeg mit x264, tsMuxeR, Qt, Pillow, Python, Schriften) stehen unter ihren eigenen Lizenzen, siehe [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+- **Lizenz:** Apache License 2.0 mit Commons Clause ([LICENSE](LICENSE)). Du darfst OpenBDAuth kostenlos nutzen, auch kommerziell, und die damit erstellten Discs verkaufen. Nicht erlaubt ist, OpenBDAuth selbst, eine veränderte Version oder Teile davon zu verkaufen. Versionen bis einschließlich 1.36.0 sind unter GPL-3.0 erschienen und bleiben unter dieser Lizenz verfügbar. Mitgelieferte Fremdkomponenten (FFmpeg mit x264, tsMuxeR, Qt, Pillow, Python, Schriften) stehen unter ihren eigenen Lizenzen, siehe [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+- **Warum „Open“?** Der Quellcode ist offen und OpenBDAuth ist kostenlos, für alle und für immer. Du darfst ihn lesen, ändern und weitergeben. Nur verkaufen darf ihn niemand. Deshalb gilt OpenBDAuth formal als „Source Available“ und nicht als „Open Source“ im Sinne der OSI.
 - **Kein Kopierschutz:** OpenBDAuth erstellt Discs aus eigenem Material. Es umgeht keinen Kopierschutz und entschlüsselt keine Inhalte.
 - **Patente:** H.264 und MVC sind in manchen Ländern patentrechtlich geschützt. Wer Discs gewerblich vertreibt, sollte das für sein Land prüfen.
 
