@@ -14,7 +14,7 @@ Letzte Version, mit der eine Funktion auf dem Gerät bestätigt wurde.
 | Sony UBP-X700 | 2018 | v1.40.1 | ✅ v1.13.0 | ✅ v1.8.5 | ✅ v1.32.0 (7 Menüs; Form-Buttons Dreieck und Kreis ab v1.13.0) | ✅ v1.13.1 (auch zwischen Menü-Playlists; Seite und Button überstehen die Menü-Schleife) | ✅ v1.32.0 (Taste „Nächstes Kapitel“ im Film; 2D und 3D ab v1.8.5) | ✅ v1.13.0 (Ton und Untertitel) |
 | Sony BDP-S4200 | 2014 | v1.18.1 | ✅ v1.17.7 | ✅ v1.4.0 | ✅ v1.18.1 (7 Menüs; Filmende im Extras-Menü, Trailer vor dem Menü) | ✅ v1.17.7 (zwischen 7 Menü-Playlists) | ✅ v1.17.7 | ✅ v1.17.7 (Ton und Untertitel) |
 | Sony PlayStation 3 | – | v1.9.7 | ⚠ v1.9.7 (kein Ton) | – | ✅ v1.9.7 | ✅ v1.9.7 | ✅ v1.9.7 | ✅ v1.9.7 (Untertitel an/aus; Ton nicht prüfbar) |
-| Panasonic DMP-BDT111EG | – | v1.17.7 | ❌ v1.17.7 (ruckelt, wie schon immer) | ❌ bleibt stehen | ✅ v1.17.7 (7 Menüs) | ✅ v1.17.7 | ✅ v1.17.7 | – |
+| Panasonic DMP-BDT111EG | – | v1.40.1 | ❌ v1.17.7 (ruckelt, wie schon immer) | ❌ bleibt stehen | ✅ v1.40.1 (6 Menü-Varianten, `IG_VARIANTEN.iso`) | ✅ v1.17.7 | ✅ v1.17.7 | – |
 
 Der Panasonic hat sich in früheren Versionen als besonders strenger Player erwiesen (siehe Changelog); eine Disc, die dort läuft, gilt als robust. Vorrang haben aber aktuelle Player: Korrekturen für den Panasonic nur, wenn sie die Disc näher an Norm und tsMuxeR bringen, und immer mit Gegenprobe auf dem Sony.
 
@@ -43,7 +43,9 @@ Der Panasonic hat sich in früheren Versionen als besonders strenger Player erwi
 | Player | Fernseher | Ergebnis | Beobachtung |
 |---|---|---|---|
 | Sony UBP-X700 | nicht erfasst | ✅ | **Alle sechs Varianten zeigen ihre Buttons.** Die Änderungen schaden auf dem Sony also nicht. |
+| Panasonic DMP-BDT111EG | nicht erfasst | ✅ Menü | **Alle sechs Varianten zeigen ihre Buttons.** Der Testfilm (5 s, 1080p 23,976) über MOVIE erscheint nicht: Es lädt kurz, dann ist wieder das Menü da bzw. es bleibt beim Menü. Vermutlich das bekannte Filmproblem dieses Players (`v1.17.7`: ruckelt) oder der Film ist für die Ladezeit zu kurz; für den Menü-Test ohne Bedeutung. |
 
+- **Folgerung:** Keine der Varianten schadet auf Sony und Panasonic; jede kann, wenn sie auf dem Samsung hilft, übernommen werden.
 - **Für den Nutzer:** dieselbe Disc mit neutralen Texten (nur „Variant N“, Disc-Name `TEST_DISC`), da die ISO öffentlich verschickt wird. Die Menü-Clips sind unverändert.
 
 ### 2026-11-28 · v1.40.1-dev · `SUBTEST_1_40_1.iso` · SRT-Untertitel in der Größe des Films
