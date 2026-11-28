@@ -1,6 +1,6 @@
 # Plan: Menü-Stream (IG) wie bei multiAVCHD – Zeitstempel, Transport, Startseite
 
-Stand: 2026-11-28 · Status: **Referenz gelesen, Test-Disc für den Samsung geplant**.
+Stand: 2026-11-28 · Status: **Test-Disc gebaut (`tools/ig_test_disc.py`, Branch `test/ig-varianten`), auf dem Sony UBP-X700 laufen alle sechs Varianten; Rückmeldung vom Samsung ausstehend**.
 
 Anlass: Auf einem Samsung BD-E5300 zeigt eine Disc aus v1.36.0 nur den Menü-Hintergrund, keine Buttons
 (`HARDWARE_TESTS.md`, 2026-11-28). Dieselbe Disc läuft auf dem Sony UBP-X700 mit Menü. Software-Player, Sony und
