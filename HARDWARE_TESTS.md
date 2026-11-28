@@ -35,6 +35,17 @@ Der Panasonic hat sich in früheren Versionen als besonders strenger Player erwi
 
 ## Testläufe (neueste zuerst)
 
+### 2026-11-28 · v1.40.1 + `tools/ig_test_disc.py` (Branch `test/ig-varianten`) · `IG_VARIANTEN.iso` · Menü-Varianten für den Samsung BD-E5300
+
+- **Inhalt:** Über den normalen Export gebaut: sechs Menügruppen zu je zwei Seiten (also mit unsichtbarer Startseite 0), Text-Buttons, kurzer Testfilm. Danach die Menü-Clips der Varianten 2–6 umgebaut, jede in genau einem Punkt (Plan `docs/plaene/ig-timing.md`): 1 wie heute, 2 Startseite mit `default_activated_button`, 3 Startseite mit `SetButtonPage` mit festen Werten, 4 Zeitstempel nach dem Decodermodell, 5 Transport wie multiAVCHD (PCR-PID, SIT, Copy-Control), 6 = 2 + 4 + 5. Selbstprüfung: Der Writer des Skripts erzeugt ohne Änderung denselben Clip wie OpenBDAuth (bytegleich). Die Disc schaltet die Varianten alle 20 s selbst weiter. BD-RE mit OpenBDAuth (IMAPI2, 2x), geprüft: gleich der ISO.
+- **Simulator:** 0 Fehler, 0 Warnungen, 6 Hinweise (Menü-Schleife, das Weiterschalten kennt er nicht).
+
+| Player | Fernseher | Ergebnis | Beobachtung |
+|---|---|---|---|
+| Sony UBP-X700 | nicht erfasst | ✅ | **Alle sechs Varianten zeigen ihre Buttons.** Die Änderungen schaden auf dem Sony also nicht. |
+
+- **Für den Nutzer:** dieselbe Disc mit neutralen Texten (nur „Variant N“, Disc-Name `TEST_DISC`), da die ISO öffentlich verschickt wird. Die Menü-Clips sind unverändert.
+
 ### 2026-11-28 · v1.40.1-dev · `SUBTEST_1_40_1.iso` · SRT-Untertitel in der Größe des Films
 
 - **Inhalt:** Per Skript über den normalen Export gebaut (Adapter, tsMuxeR, eigener SRT-Wandler). Hauptmenü mit 5 Filmen zu je 12 s (x264-Testbild, AC3-Ton, je eine SRT mit einer ein- und einer zweizeiligen Einblendung): 1080p 23,976 (Referenz), 720p 59,94, 1440×1080 23,976 (SAR 4:3), 576i 25 4:3 (SAR 16:15), 576i 25 16:9 (SAR 64:45). Untertitel-Flächen im Clip: 1920×1080, 1280×720, 1920×1080, 720×576, 720×576 (bis v1.40.0 überall 1920×1080). BD-RE mit OpenBDAuth (IMAPI2, 2x), geprüft: gleich der ISO.
