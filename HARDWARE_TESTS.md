@@ -11,7 +11,7 @@ Letzte Version, mit der eine Funktion auf dem Gerät bestätigt wurde.
 
 | Player | Baujahr | Zuletzt getestet | Filme 2D | Filme 3D | Menü | Menüseiten wechseln | Kapitelsprung | Ton-/Untertitelwahl im Menü |
 |---|---|---|---|---|---|---|---|---|
-| Sony UBP-X700 | 2018 | v1.36.0 | ✅ v1.13.0 | ✅ v1.8.5 | ✅ v1.32.0 (7 Menüs; Form-Buttons Dreieck und Kreis ab v1.13.0) | ✅ v1.13.1 (auch zwischen Menü-Playlists; Seite und Button überstehen die Menü-Schleife) | ✅ v1.32.0 (Taste „Nächstes Kapitel“ im Film; 2D und 3D ab v1.8.5) | ✅ v1.13.0 (Ton und Untertitel) |
+| Sony UBP-X700 | 2018 | v1.40.1 | ✅ v1.13.0 | ✅ v1.8.5 | ✅ v1.32.0 (7 Menüs; Form-Buttons Dreieck und Kreis ab v1.13.0) | ✅ v1.13.1 (auch zwischen Menü-Playlists; Seite und Button überstehen die Menü-Schleife) | ✅ v1.32.0 (Taste „Nächstes Kapitel“ im Film; 2D und 3D ab v1.8.5) | ✅ v1.13.0 (Ton und Untertitel) |
 | Sony BDP-S4200 | 2014 | v1.18.1 | ✅ v1.17.7 | ✅ v1.4.0 | ✅ v1.18.1 (7 Menüs; Filmende im Extras-Menü, Trailer vor dem Menü) | ✅ v1.17.7 (zwischen 7 Menü-Playlists) | ✅ v1.17.7 | ✅ v1.17.7 (Ton und Untertitel) |
 | Sony PlayStation 3 | – | v1.9.7 | ⚠ v1.9.7 (kein Ton) | – | ✅ v1.9.7 | ✅ v1.9.7 | ✅ v1.9.7 | ✅ v1.9.7 (Untertitel an/aus; Ton nicht prüfbar) |
 | Panasonic DMP-BDT111EG | – | v1.17.7 | ❌ v1.17.7 (ruckelt, wie schon immer) | ❌ bleibt stehen | ✅ v1.17.7 (7 Menüs) | ✅ v1.17.7 | ✅ v1.17.7 | – |
@@ -34,6 +34,17 @@ Der Panasonic hat sich in früheren Versionen als besonders strenger Player erwi
 ---
 
 ## Testläufe (neueste zuerst)
+
+### 2026-11-28 · v1.40.1-dev · `SUBTEST_1_40_1.iso` · SRT-Untertitel in der Größe des Films
+
+- **Inhalt:** Per Skript über den normalen Export gebaut (Adapter, tsMuxeR, eigener SRT-Wandler). Hauptmenü mit 5 Filmen zu je 12 s (x264-Testbild, AC3-Ton, je eine SRT mit einer ein- und einer zweizeiligen Einblendung): 1080p 23,976 (Referenz), 720p 59,94, 1440×1080 23,976 (SAR 4:3), 576i 25 4:3 (SAR 16:15), 576i 25 16:9 (SAR 64:45). Untertitel-Flächen im Clip: 1920×1080, 1280×720, 1920×1080, 720×576, 720×576 (bis v1.40.0 überall 1920×1080). BD-RE mit OpenBDAuth (IMAPI2, 2x), geprüft: gleich der ISO.
+- **Simulator:** 0 Fehler, 0 Warnungen, 0 Hinweise.
+
+| Player | Fernseher | Ergebnis | Beobachtung |
+|---|---|---|---|
+| Sony UBP-X700 | nicht erfasst | ✅ Untertitel | **In allen fünf Filmen passen die Untertitel** (Lage, Größe, bei SD 16:9 und 1440×1080 nicht breitgezogen). Bei den beiden SD-Filmen **ruckelt das Bild**. |
+
+- **Ruckeln bei SD:** vermutlich das Testmaterial, nicht die Disc. Die Clips sind als 576i 25 richtig gekennzeichnet (MPLS und CLPI `0x23`), aber x264 hat trotz `tff=1` *bottom field first* kodiert (ffmpeg übergeht die Option bei progressiven Testbildern; SEI `interlaced=bff`), während der Stream an anderer Stelle *top field first* meldet. Möglich ist auch die Ausgabe mit 60 Hz bei 25-fps-Material. **Offen:** SD-Gegenprobe mit sauber kodiertem 576i (Halbbildreihenfolge eindeutig) bzw. mit 50-Hz-Ausgabe.
 
 ### 2026-11-28 · v1.36.0 (Disc eines Nutzers) · `BDTESTMENU1.iso` · Gegenprobe zur Meldung „Menü ohne Buttons“ (Samsung BD-E5300)
 

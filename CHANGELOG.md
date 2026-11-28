@@ -5,6 +5,20 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.40.1] - 2026-11-28
+
+### Untertitel in der Größe des Films
+
+Anlass: Meldung zu v1.36.0. Ein Trailer in 720p hatte fertige Untertitel (`.sup`) in 1920×1080. Beim Nachsehen zeigte sich, dass der eigene SRT-Wandler denselben Fehler erzeugt (Plan `docs/plaene/untertitel-aufloesung.md`).
+
+- **SRT → SUP in der Untertitel-Fläche des Films** (`modules/subtitles/srt_to_sup.py`): Bisher immer 1920×1080. Bei 720p und SD lagen die Untertitel damit außerhalb des Bildes oder wurden vom Player verworfen. Jetzt gelten die Größen wie bei tsMuxeR (`TextToPGSConverter::enlargeCrop`), bei SD aber nach der Höhe: 1920×1080 und 1440×1080 → 1920×1080, 1280×720 → 1280×720, 720×576 → 720×576, 720×480 → 720×480 (`pgs_canvas`). Schrift (48 px), Abstand nach unten (70 px) und Kontur gelten für 1080 und werden mit der Höhe skaliert.
+- **SD anamorph:** Der Player zieht die 720 Pixel breite Fläche wie das Bild auf das Seitenverhältnis. Die Schrift wird deshalb um 1/SAR waagerecht gestaucht (`pgs_squeeze`, z. B. 45/64 bei 16:9 PAL), damit sie auf dem Fernseher nicht breitgezogen aussieht. 1440×1080 liegt auf der vollen Fläche und wird nicht gestaucht.
+- **Lange Zeilen:** Wird ein Untertitel breiter als die Fläche abzüglich je 5 % Rand, wird er kleiner gerendert. Ein Bild breiter als die Fläche verwirft der Player.
+- **Bildrate des richtigen Films:** Die SRT eines Films wird mit dessen Bildrate gewandelt (`frame_rate` im PCS). Bisher galt immer die des ersten Films, eine SRT am Trailer mit 59,94 fps bekam z. B. 24 fps vom Hauptfilm.
+- **Fertige `.sup` werden geprüft:** Der Preflight liest die Größe aus der ersten PCS (`read_sup_size`). Passt sie nicht zum Video, erscheint eine Warnung am Film, mit dem Rat, eine `.sup` in der passenden Größe zu verwenden oder die Untertitel als `.srt` zu importieren. Fertige `.sup` werden nicht umgerechnet.
+- **Test-Disc** mit 1080p, 720p, 1440×1080, SD 4:3 und SD 16:9, jeweils mit SRT (`HARDWARE_TESTS.md`).
+- **Tests:** `tests/test_subtitle_size.py` mit Fläche, Lage, Schriftgröße und Stauchen je Format, Bildrate im PCS, zu langen Zeilen, der SRT eines zweiten Films im Meta-Builder und der Preflight-Warnung (Fall aus der Meldung, passende Größen, unlesbare Datei).
+
 ## [1.40.0] - 2026-11-28
 
 Neue Lizenz, deshalb ein Sprung in der Versionsnummer: Ab 1.40.0 gilt Apache-2.0 mit Commons Clause, bis einschließlich 1.36.0 GPL-3.0.

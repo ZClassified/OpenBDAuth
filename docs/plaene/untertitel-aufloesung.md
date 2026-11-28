@@ -1,6 +1,6 @@
 # Plan: Untertitel in der Auflösung des Films
 
-Stand: 2026-11-28 · Status: **geplant für v1.40.1**. Anlass: Meldung zu v1.36.0 (Samsung BD-E5300, `HARDWARE_TESTS.md`).
+Stand: 2026-11-28 · Status: **umgesetzt in v1.40.1**, auf dem Sony UBP-X700 bestätigt (`HARDWARE_TESTS.md`). Anlass: Meldung zu v1.36.0 (Samsung BD-E5300, `HARDWARE_TESTS.md`).
 
 Ein Trailer in 720p hatte fertige PGS-Untertitel (`.sup`) in 1920×1080. OpenBDAuth hat das nicht bemerkt. Beim
 Nachsehen zeigte sich: Der eigene SRT-Wandler erzeugt denselben Fehler, denn er rendert immer in 1920×1080.
@@ -42,11 +42,12 @@ Die Untertitel haben dieselbe Auflösung wie das Video (BD-ROM Part 3: `video_de
 - `convert_srt_to_sup(…, width, height)` bzw. `build_sup_cue_bytes(…, width, height)`; Position und PCS aus diesen
   Werten.
 - Schriftgröße und Abstand nach unten mit der Bildhöhe skalieren: 48 px und 70 px bei 1080, also 32 px und 47 px
-  bei 720, 23 px und 34 px bei 480, 26 px und 37 px bei 576.
+  bei 720, 26 px und 37 px bei 576, 21 px und 31 px bei 480.
 - **1440×1080:** Die Untertitel-Fläche ist 1920×1080 und wird nicht gestaucht, der Text wird normal gerendert.
 - **SD 16:9 (anamorph):** Der Player zieht die 720 Pixel breite Fläche auf 16:9. Der Text wird deshalb um das
   Pixel-Seitenverhältnis waagerecht gestaucht gerendert (SAR aus `video_details`, z. B. 64:45 bei 576, 32:27 bei 480),
-  damit er auf dem Fernseher nicht breitgezogen aussieht. Bei SD 4:3 (SAR nahe 1) ohne Stauchen.
+  damit er auf dem Fernseher nicht breitgezogen aussieht. Bei SD 4:3 genauso, nur mit kleinem Faktor (SAR 16:15 →
+  15/16), denn der Player skaliert auch dort.
 - `_ensure_sup_path` bekommt den Titel und nimmt dessen Auflösung (aus `video_details`) und dessen Bildrate statt
   `self.state`.
 - Ohne bekannte Auflösung (alte Projekte ohne `video_details`) bleibt es bei 1920×1080.

@@ -76,8 +76,10 @@ class MetaBuilder:
         """Gibt die Framerate als sauberen String für tsMuxeR zurück."""
         return self._get_tsmuxer_fps_str(self.state, video_path=video_path)
 
-    def _ensure_sup_path(self, sub_path: str, lang: str = "und", idx: int = 1, sup_dir: Optional[str] = None) -> str:
-        """Wandelt .srt automatisch in standardkonformes .sup (BD-ROM PGS) um."""
+    def _ensure_sup_path(self, sub_path: str, lang: str = "und", idx: int = 1, sup_dir: Optional[str] = None,
+                         title=None) -> str:
+        """Wandelt .srt automatisch in standardkonformes .sup (BD-ROM PGS) um – in der Größe und Bildrate des Titels
+        (v1.40.1; bis v1.40.0 immer 1920×1080 und die Bildrate des ersten Titels)."""
         if not sub_path.lower().endswith('.srt'):
             return self._format_path(sub_path)
 
@@ -101,12 +103,22 @@ class MetaBuilder:
         else:
             sup_file = os.path.join(sup_dir, f"{safe_base}.sup")
 
+        source = title if title is not None else self.state
         try:
-            fps_val = float(getattr(self.state, "fps", 23.976))
+            fps_val = float(getattr(source, "fps", 23.976))
         except (ValueError, TypeError):
             fps_val = 23.976
 
-        convert_srt_to_sup(sub_path, sup_file, fps=fps_val)
+        details = getattr(source, "video_details", None)
+        video_size, sar = None, None
+        if isinstance(details, dict):
+            try:
+                video_size = (int(details.get("width") or 0), int(details.get("height") or 0))
+            except (TypeError, ValueError):
+                video_size = None
+            sar = details.get("sar")
+
+        convert_srt_to_sup(sub_path, sup_file, fps=fps_val, video_size=video_size, sar=sar)
         return self._format_path(sup_file)
 
     def generate_title_meta_content(self, title, sup_dir: Optional[str] = None) -> str:
@@ -163,7 +175,7 @@ class MetaBuilder:
         for idx, sub in enumerate(getattr(title, "subtitle_tracks", []), start=1):
             path = sub["path"]
             lang = sub.get("lang", "und")
-            sup_path = self._ensure_sup_path(path, lang=lang, idx=idx, sup_dir=sup_dir)
+            sup_path = self._ensure_sup_path(path, lang=lang, idx=idx, sup_dir=sup_dir, title=title)
             lines.append(f'S_HDMV/PGS, "{sup_path}", lang={lang}')
 
         return "\n".join(lines)
