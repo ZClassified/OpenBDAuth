@@ -1,6 +1,6 @@
 # Plan: Untertitel in der Auflösung des Films
 
-Stand: 2026-11-28 · Status: **geplant**. Anlass: Meldung zu v1.36.0 (Samsung BD-E5300, `HARDWARE_TESTS.md`).
+Stand: 2026-11-28 · Status: **geplant für v1.40.1**. Anlass: Meldung zu v1.36.0 (Samsung BD-E5300, `HARDWARE_TESTS.md`).
 
 Ein Trailer in 720p hatte fertige PGS-Untertitel (`.sup`) in 1920×1080. OpenBDAuth hat das nicht bemerkt. Beim
 Nachsehen zeigte sich: Der eigene SRT-Wandler erzeugt denselben Fehler, denn er rendert immer in 1920×1080.
@@ -25,10 +25,28 @@ Die Untertitel haben dieselbe Auflösung wie das Video (BD-ROM Part 3: `video_de
 
 ### 1. SRT in der Auflösung des Films rendern
 
+- **Größe der Untertitel** wie bei tsMuxeR (`TextToPGSConverter::enlargeCrop` in
+  [textSubtitles.cpp](https://github.com/justdan96/tsMuxer/blob/master/tsMuxer/textSubtitles.cpp), gelesen am
+  2026-11-28), aber bei SD nach der Höhe:
+
+  | Video | PCS `video_width × video_height` |
+  |---|---|
+  | 1920×1080, 1440×1080 | 1920×1080 |
+  | 1280×720 | 1280×720 |
+  | 720×576 | 720×576 |
+  | 720×480 | 720×480 |
+
+  tsMuxeR prüft nur die Breite (> 1280 → 1920×1080, > 720 → 1280×720) und unterscheidet SD über die Bildrate (25/50 →
+  576). Die Bildrate liest es dabei, bevor sie gesetzt ist; SD wird dort vermutlich immer 720×480. Anamorphes Video
+  behandelt tsMuxeR nicht besonders.
 - `convert_srt_to_sup(…, width, height)` bzw. `build_sup_cue_bytes(…, width, height)`; Position und PCS aus diesen
   Werten.
 - Schriftgröße und Abstand nach unten mit der Bildhöhe skalieren: 48 px und 70 px bei 1080, also 32 px und 47 px
   bei 720, 23 px und 34 px bei 480, 26 px und 37 px bei 576.
+- **1440×1080:** Die Untertitel-Fläche ist 1920×1080 und wird nicht gestaucht, der Text wird normal gerendert.
+- **SD 16:9 (anamorph):** Der Player zieht die 720 Pixel breite Fläche auf 16:9. Der Text wird deshalb um das
+  Pixel-Seitenverhältnis waagerecht gestaucht gerendert (SAR aus `video_details`, z. B. 64:45 bei 576, 32:27 bei 480),
+  damit er auf dem Fernseher nicht breitgezogen aussieht. Bei SD 4:3 (SAR nahe 1) ohne Stauchen.
 - `_ensure_sup_path` bekommt den Titel und nimmt dessen Auflösung (aus `video_details`) und dessen Bildrate statt
   `self.state`.
 - Ohne bekannte Auflösung (alte Projekte ohne `video_details`) bleibt es bei 1920×1080.
@@ -50,15 +68,16 @@ Die Untertitel haben dieselbe Auflösung wie das Video (BD-ROM Part 3: `video_de
 
 ## Offen
 
-- **1440×1080 (anamorph):** Muss das PCS 1440×1080 oder 1920×1080 tragen? Eine Referenz-Disc oder tsMuxeR mit einem
-  Test-Stream ansehen.
-- **SD (720×576, 720×480):** Größe der Schrift für 4:3 und 16:9 (anamorph) festlegen.
+- **Auf dem Player bestätigen:** 1440×1080 mit Fläche 1920×1080 und das Stauchen bei SD 16:9 sind aus tsMuxeR und
+  Foren abgeleitet, nicht aus der Spec. Vor dem Release eine Test-ISO mit vier kurzen Filmen (720p, 1440×1080, SD 4:3,
+  SD 16:9), jeweils mit SRT, auf dem Sony UBP-X700 prüfen: Lage, Größe, Seitenverhältnis der Schrift.
 - **Ältere Projekte:** Haben sie `.srt`-Untertitel an 720p-Filmen, ist die nächste Disc nach dem Fix richtig. Ein
   Hinweis beim Öffnen ist nicht nötig, denn gewandelt wird erst beim Export.
 
 ## Tests
 
-- SRT an Filmen mit 1920×1080, 1280×720, 720×576: PCS-Größe, Position im Bild, Schriftgröße.
+- SRT an Filmen mit 1920×1080, 1440×1080, 1280×720, 720×576, 720×480 (4:3 und 16:9): PCS-Größe, Position im Bild,
+  Schriftgröße, Stauchen nur bei SD 16:9.
 - SRT am zweiten Film mit anderer Bildrate als der erste: `frame_rate` im PCS.
 - `.sup` mit 1920×1080 an einem 720p-Film: Warnung; passende `.sup`: keine; unlesbare Datei: keine Warnung, kein Absturz.
 - Hardware: ein 720p-Film mit SRT auf dem Sony UBP-X700.
