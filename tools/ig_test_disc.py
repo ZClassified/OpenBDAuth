@@ -78,10 +78,12 @@ def ff(*args):
 def background(path: str, number: int):
     img = Image.new("RGB", (1920, 1080), (24, 28, 40))
     draw = ImageDraw.Draw(img)
-    big, small = load_subtitle_font(150), load_subtitle_font(48)
-    for text, font, y in ((f"Variant {number}", big, 140), (VARIANTS[number], small, 340)):
-        w = draw.textbbox((0, 0), text, font=font)[2]
-        draw.text(((1920 - w) // 2, y), text, font=font, fill=(240, 240, 240))
+    # Nur Nummer und Hinweis: Die ISO geht an Tester und liegt danach öffentlich im Netz; was eine Variante ändert,
+    # steht nur hier im Skript
+    big = load_subtitle_font(150)
+    text = f"Variant {number}"
+    w = draw.textbbox((0, 0), text, font=big)[2]
+    draw.text(((1920 - w) // 2, 140), text, font=big, fill=(240, 240, 240))
     draw.text((120, 960), "Buttons visible? Please note the number. The next variant follows after 20 seconds.",
               font=load_subtitle_font(36), fill=(170, 170, 170))
     img.save(path)
@@ -97,11 +99,11 @@ def build_project(media: str, disc: str):
        "-b:a", "192k", film_audio)
 
     graph = starter_project("de")
-    graph.settings.project_name = "IG_VARIANTEN"
+    graph.settings.project_name = "TEST_DISC"
     graph.settings.export_format = "folder"
     graph.settings.output_path = disc
     film = graph.films[0]
-    film.name, film.video_base, film.fps = "Testfilm", film_video, 23.976
+    film.name, film.video_base, film.fps = "Movie", film_video, 23.976
     film.audio_tracks = [Track(id="a1", path=film_audio, lang="deu")]
 
     menus = []
@@ -399,8 +401,8 @@ def main(out: str):
     cycle_movie_objects(os.path.join(bdmv, "MovieObject.bdmv"), [obj for obj, _ in groups])
     shutil.copy(os.path.join(bdmv, "MovieObject.bdmv"), os.path.join(bdmv, "BACKUP", "MovieObject.bdmv"))
 
-    iso = os.path.join(out, "IG_VARIANTEN.iso")
-    create_udf_iso(disc, iso, volume_label="IG_VARIANTEN", log_callback=lambda m: None)
+    iso = os.path.join(out, "TEST_DISC.iso")
+    create_udf_iso(disc, iso, volume_label="TEST_DISC", log_callback=lambda m: None)
     print("ISO:", iso)
 
 
