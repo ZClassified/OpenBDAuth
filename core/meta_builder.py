@@ -59,8 +59,10 @@ class MetaBuilder:
                 fps_float = 29.97
 
         # Bei 24p / 23.976p H.264 Elementary Streams meldet ffprobe oft 48 fps (2 Felder pro Frame)
-        if 47.0 <= fps_float <= 48.5:
-            fps_float = 24.0 if abs(fps_float - 48.0) < 0.1 else 23.976
+        from modules.video_tools import doubled_rate_to_fps
+        doubled = doubled_rate_to_fps(fps_float)
+        if doubled is not None:
+            fps_float = doubled
 
         # Bei 1080p 3D Streams (MVC vorhanden): Framerate darf niemals > 30 sein
         if getattr(title_or_state, "video_mvc", None) and fps_float > 30.0:

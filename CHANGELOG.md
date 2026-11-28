@@ -5,11 +5,28 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.40.0] - 2026-11-28
+
+Neue Lizenz, deshalb ein Sprung in der Versionsnummer: Ab 1.40.0 gilt Apache-2.0 mit Commons Clause, bis einschließlich 1.36.0 GPL-3.0.
+
+### Bildrate roher H.264-Videos aus dem SPS
+
+Anlass: Meldung zu v1.36.0. Ein Trailer in 720p mit 29,97 fps lief auf der Disc doppelt so schnell (bestätigt auf dem Sony UBP-X700 mit der Disc des Nutzers), ein anderer mit 23,976 fps wurde als 24 fps gemuxt (`HARDWARE_TESTS.md`).
+
+- **Ursache:** ffprobe meldet bei rohem H.264 als `r_frame_rate` den Quotienten `time_scale / num_units_in_tick` ohne Halbierung, also die doppelte Bildrate, und als `avg_frame_rate` immer 25. Gemessen mit ffprobe 8.1 und x264: 23,976 → `48000/1001`, 24 → `48/1`, 25 → `50/1`, 720p 29,97 → `60000/1001`, 720p 59,94 → `120000/1001`, 720p 50 → `100/1`. Die Regel „720p, 59–60 → 59,94“ ging von der echten Rate aus; aus 29,97 wurde so 59,94. Die Grenze für die doppelte 24p-Rate war ±0,1, damit wurde auch 47,952 (doppelte 23,976) zu 24.
+- **Jetzt:** Bei `.264`, `.h264` und `.avc` liest `VideoTools.h264_frame_rate` die Zeitbasis aus den VUI-Daten des SPS; Bildrate = `time_scale / (2 · num_units_in_tick)`, gerundet auf die Raten für tsMuxeR (exakt 30 und 60 wie bisher auf 29,97 und 59,94 mit dem Hinweis auf den Tonversatz). Bei 1080i steht im SPS die Halbbildrate, das Ergebnis ist die Bildrate (25 bzw. 29,97). Ohne Zeitbasis im SPS bleibt es bei ffprobe und dem bisherigen Veto-System, mit der Grenze 48 ± 0,01 (auch im Meta-Builder). 3D: 25 fps wird wie bisher zu 23,976. Container (`.m2ts`) unverändert: Dort meldet ffprobe die echte Rate.
+- **Ältere Projekte** werden beim Öffnen und nach dem Neu-Verknüpfen fehlender Dateien geprüft: Weicht die gespeicherte Rate vom SPS ab, wird das Video neu analysiert (ein Rückgängig-Schritt „Bildrate korrigieren“ je Film, das Projekt gilt als geändert). Ein Hinweis nennt die Filme mit alter und neuer Rate und bittet, neu zu exportieren.
+- **Neuer Hinweis `UNOFFICIAL_720P_RATE`:** 720p ist auf der Blu-ray nur mit 23,976, 24, 50 und 59,94 fps erlaubt; bei 25 und 29,97 fps erscheint er mit dem Rat, die Bildrate zu verdoppeln oder als 1080i zu kodieren.
+- **Projektdatei:** `video_details` enthält zusätzlich `fps_sps` (Rate aus dem SPS); `fps_raw` bleibt der Wert von ffprobe.
+- **Tests:** `tests/test_frame_rate.py` mit echten x264-Strömen in allen gemessenen Fällen und 1080i25, m2ts als Gegenprobe, Grenzen, Rückfall ohne Zeitbasis, 3D-Veto, Hinweis auf exakt 60 fps aus dem SPS, Korrektur älterer Projekte mit Rückgängig.
+
+### Plan: Menü ohne Buttons auf dem Samsung BD-E5300
+
+- `docs/plaene/ig-timing.md` aus der UHD-Entwicklung übernommen (Zeitstempel im Menü-Stream). Die Disc des Nutzers läuft auf dem Sony UBP-X700 mit Menü; die Ursache auf dem Samsung ist offen.
 
 ### Neue Lizenz
 
-- **Lizenz:** OpenBDAuth steht ab der nächsten Version unter der Apache License 2.0 mit Commons Clause statt unter GPL-3.0 (`LICENSE`). Nutzen bleibt kostenlos und auch kommerziell erlaubt, ebenso der Verkauf der erstellten Discs; das Programm selbst, veränderte Versionen oder Teile davon dürfen nicht verkauft werden. Versionen bis einschließlich 1.36.0 bleiben unter GPL-3.0.
+- **Lizenz:** OpenBDAuth steht ab dieser Version unter der Apache License 2.0 mit Commons Clause statt unter GPL-3.0 (`LICENSE`). Nutzen bleibt kostenlos und auch kommerziell erlaubt, ebenso der Verkauf der erstellten Discs; das Programm selbst, veränderte Versionen oder Teile davon dürfen nicht verkauft werden. Versionen bis einschließlich 1.36.0 bleiben unter GPL-3.0.
 - **README:** Lizenz-Badge, Abschnitt „Rechtliches“ bzw. „Legal“ und neuer Absatz „Warum Open?“.
 - Fremdkomponenten (FFmpeg mit x264, tsMuxeR, Qt, Pillow, Python, Schriften) behalten ihre eigenen Lizenzen; `licenses/` und `THIRD_PARTY_LICENSES.md` bleiben unverändert.
 

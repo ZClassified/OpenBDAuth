@@ -11,7 +11,7 @@ Letzte Version, mit der eine Funktion auf dem Gerät bestätigt wurde.
 
 | Player | Baujahr | Zuletzt getestet | Filme 2D | Filme 3D | Menü | Menüseiten wechseln | Kapitelsprung | Ton-/Untertitelwahl im Menü |
 |---|---|---|---|---|---|---|---|---|
-| Sony UBP-X700 | 2018 | v1.32.0 | ✅ v1.13.0 | ✅ v1.8.5 | ✅ v1.32.0 (7 Menüs; Form-Buttons Dreieck und Kreis ab v1.13.0) | ✅ v1.13.1 (auch zwischen Menü-Playlists; Seite und Button überstehen die Menü-Schleife) | ✅ v1.32.0 (Taste „Nächstes Kapitel“ im Film; 2D und 3D ab v1.8.5) | ✅ v1.13.0 (Ton und Untertitel) |
+| Sony UBP-X700 | 2018 | v1.36.0 | ✅ v1.13.0 | ✅ v1.8.5 | ✅ v1.32.0 (7 Menüs; Form-Buttons Dreieck und Kreis ab v1.13.0) | ✅ v1.13.1 (auch zwischen Menü-Playlists; Seite und Button überstehen die Menü-Schleife) | ✅ v1.32.0 (Taste „Nächstes Kapitel“ im Film; 2D und 3D ab v1.8.5) | ✅ v1.13.0 (Ton und Untertitel) |
 | Sony BDP-S4200 | 2014 | v1.18.1 | ✅ v1.17.7 | ✅ v1.4.0 | ✅ v1.18.1 (7 Menüs; Filmende im Extras-Menü, Trailer vor dem Menü) | ✅ v1.17.7 (zwischen 7 Menü-Playlists) | ✅ v1.17.7 | ✅ v1.17.7 (Ton und Untertitel) |
 | Sony PlayStation 3 | – | v1.9.7 | ⚠ v1.9.7 (kein Ton) | – | ✅ v1.9.7 | ✅ v1.9.7 | ✅ v1.9.7 | ✅ v1.9.7 (Untertitel an/aus; Ton nicht prüfbar) |
 | Panasonic DMP-BDT111EG | – | v1.17.7 | ❌ v1.17.7 (ruckelt, wie schon immer) | ❌ bleibt stehen | ✅ v1.17.7 (7 Menüs) | ✅ v1.17.7 | ✅ v1.17.7 | – |
@@ -34,6 +34,18 @@ Der Panasonic hat sich in früheren Versionen als besonders strenger Player erwi
 ---
 
 ## Testläufe (neueste zuerst)
+
+### 2026-11-28 · v1.36.0 (Disc eines Nutzers) · `BDTESTMENU1.iso` · Gegenprobe zur Meldung „Menü ohne Buttons“ (Samsung BD-E5300)
+
+- **Anlass:** Meldung eines Nutzers: Auf dem **Samsung BD-E5300/ZD** (BD-RE, unter Windows 10 gebrannt) ist im Menü nur der Hintergrund zu sehen, keine Buttons, kein Weiterkommen. In Leawo Player (PC) läuft alles.
+- **Inhalt:** sein exportierter BDMV-Ordner (v1.36.0), ohne den Hauptfilm (`00000.m2ts` nicht mitgeschickt). Hauptmenü (3 Buttons), Untertitelmenü (5), Bonusmenü (3) als eine Menü-Playlist mit unsichtbarer Startseite 0, dazu 2 Trailer. Daraus mit der UDF-Engine eine ISO gebaut (132 MB), BD-RE mit OpenBDAuth (IMAPI2, 2x) gebrannt, geprüft: gleich der ISO.
+- **Simulator:** 0 Fehler, 4 Warnungen (im Menü gewählter Untertitel 2 oder 3 gilt auch für die Trailer, die nur einen haben).
+
+| Player | Fernseher | Ergebnis | Beobachtung |
+|---|---|---|---|
+| Sony UBP-X700 | nicht erfasst | ⚠ | **Menü läuft**, Bonusmenü öffnet, beide Trailer spielen. **Trailer 2 läuft doppelt so schnell:** 720p mit 29,97 fps wurde als 59,94 fps gemuxt (ffprobe meldet bei rohem H.264 die doppelte Rate, behoben in v1.40.0). Trailer 1 sieht gut aus (23,976 fps als 24 gemuxt, 0,1 % zu schnell, nicht sichtbar). Hauptfilm nicht testbar. |
+
+- **Folgerung:** Die Disc-Daten des Nutzers sind in Ordnung; das Menüproblem hängt am Samsung oder an seinem Brennweg (exportiert als Ordner, gebrannt unbekannt). **Offen:** Rückfragen an den Nutzer (Brennweg, OK-Taste auf dem leeren Menü, Firmware); danach gegebenenfalls Test-ISOs nach `docs/plaene/ig-timing.md`.
 
 ### 2026-11-22 · v1.34.0-dev · Testdatei 2 GiB · neuer Schreibweg (MMC über `IDiscRecorder2Ex`) auf BD-RE
 

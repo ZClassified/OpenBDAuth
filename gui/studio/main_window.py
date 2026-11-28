@@ -856,11 +856,24 @@ class StudioWindow(QMainWindow):
             from core.media_paths import missing_media
             if missing_media(self.controller.project):
                 QTimer.singleShot(0, self.open_relink_dialog)
+            else:
+                QTimer.singleShot(0, self.correct_frame_rates)
 
     def open_relink_dialog(self):
         """Fehlende Mediendateien suchen und neu verknüpfen (v1.17.0)."""
         from gui.studio.relink_dialog import RelinkDialog
         RelinkDialog(self.controller, self).exec()
+        self.correct_frame_rates()
+
+    def correct_frame_rates(self):
+        """Falsch erkannte Bildraten älterer Projekte korrigieren und die Filme nennen (v1.40.0)."""
+        fixes = self.importer.correct_frame_rates()
+        if not fixes:
+            return
+        lines = "\n".join(self.t("studio_fps_fixed_line", film=name, old=f"{old:g}", new=f"{new:g}")
+                          for name, old, new in fixes)
+        QMessageBox.information(self, self.t("studio_fps_fixed_title"),
+                                self.t("studio_fps_fixed_text", films=lines))
 
     def save_project(self) -> bool:
         if not self.current_file:

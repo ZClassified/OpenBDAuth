@@ -48,6 +48,26 @@ def date_text(release: Release, lang: str) -> str:
 
 
 RELEASES: Tuple[Release, ...] = (
+    Release("1.40.0", "2026-11-28",
+            de=Notes("Richtige Bildrate, neue Lizenz", (
+                "Die Bildrate roher H.264-Videos (.264, .h264, .avc) wird jetzt aus dem Video selbst gelesen. "
+                "Bisher konnte ein Video mit 29,97 fps in 720p doppelt so schnell laufen, und 23,976 fps wurde zu "
+                "24 fps.",
+                "Ältere Projekte werden beim Öffnen korrigiert; ein Hinweis nennt die betroffenen Filme. Bitte "
+                "danach speichern und die Disc neu exportieren.",
+                "Neuer Hinweis: 720p ist auf der Blu-ray nur mit 23,976, 24, 50 oder 59,94 fps erlaubt.",
+                "OpenBDAuth steht jetzt unter der Apache License 2.0 mit Commons Clause: weiter kostenlos, auch "
+                "kommerziell, Discs dürfen verkauft werden, das Programm selbst nicht.",
+            )),
+            en=Notes("Correct frame rate, new license", (
+                "The frame rate of raw H.264 videos (.264, .h264, .avc) is now read from the video itself. Until "
+                "now, a 720p video at 29.97 fps could play twice as fast, and 23.976 fps became 24 fps.",
+                "Older projects are corrected when opened; a message names the affected movies. Please save "
+                "afterwards and export the disc again.",
+                "New hint: on Blu-ray, 720p is only allowed at 23.976, 24, 50 or 59.94 fps.",
+                "OpenBDAuth is now under the Apache License 2.0 with the Commons Clause: still free, also "
+                "commercially, discs may be sold, the program itself may not.",
+            ))),
     Release("1.36.0", "2026-11-24",
             de=Notes("Disc-Größe gehört zum Projekt", (
                 "Die Disc-Größe (BD-25 oder BD-50) stellst du jetzt im Start-Knoten der Disc ein, neben Name, Titel "
