@@ -81,6 +81,8 @@ def run_preflight(project: DiscProject, check_files: bool = True) -> List[Issue]
             add(ERROR, tr("pf_bluray_hevc_film", film=film.name), film.id)
         elif project.settings.is_uhd and film.video_base and not film.is_hevc:
             add(WARNING, tr("pf_uhd_h264_film", film=film.name), film.id)
+        if check_files:
+            _check_subtitle_sizes(film, add)
     if project.settings.is_uhd:
         ranges = {(f.video_details or {}).get("dynamic_range") for f in project.films if f.is_hevc} - {None}
         if len(ranges) > 1:
@@ -186,6 +188,26 @@ def run_preflight(project: DiscProject, check_files: bool = True) -> List[Issue]
                 add(INFO, tr("pf_no_language_menu", film=film.name), film.id)
 
     return issues
+
+
+def _check_subtitle_sizes(film, add):
+    """Fertige .sup (v1.40.1): Die Größe in der ersten PCS muss zur Untertitel-Fläche des Videos passen (1440×1080
+    → 1920×1080, siehe pgs_canvas). Sonst erscheinen die Untertitel auf vielen Playern an falscher Stelle oder gar
+    nicht. .srt wandelt OpenBDAuth selbst in der richtigen Größe."""
+    details = film.video_details if isinstance(film.video_details, dict) else {}
+    width, height = int(details.get("width") or 0), int(details.get("height") or 0)
+    if not width or not height:
+        return
+    from modules.subtitles.srt_to_sup import pgs_canvas, read_sup_size
+    expected = pgs_canvas(width, height)
+    for track in film.subtitle_tracks:
+        if not str(track.path or "").lower().endswith(".sup") or not os.path.isfile(track.path):
+            continue
+        size = read_sup_size(track.path)
+        if size is not None and tuple(size) != expected:
+            add(WARNING, tr("pf_sub_size", film=film.name, file=os.path.basename(track.path),
+                            sub=f"{size[0]}×{size[1]}", video=f"{width}×{height}",
+                            canvas=f"{expected[0]}×{expected[1]}"), film.id)
 
 
 def has_errors(issues: List[Issue]) -> bool:

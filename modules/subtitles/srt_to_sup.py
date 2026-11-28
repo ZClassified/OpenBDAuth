@@ -4,7 +4,7 @@ SRT-zu-PGS-Konverter (.sup).
 
 Wandelt Text-Untertitel (.srt) in standardkonforme Blu-ray Presentation
 Graphic Stream (PGS / SUP) Bitmaps um:
-- Rendern mit Pillow (1920x1080)
+- Rendern mit Pillow in der Untertitel-Fläche des Films (1920x1080, 1280x720, 720x576, 720x480; ab v1.40.1)
 - weiße Schrift mit schwarzer Kontur
 - BT.709 YCbCrA Farbpalette mit Transparenz
 - BD-ROM Part 3 konformes RLE-Packing (PCS, WDS, PDS, ODS, END)
@@ -149,15 +149,71 @@ def get_subtitle_font(text: str, font_size: int = 48) -> ImageFont.FreeTypeFont:
     return load_subtitle_font(font_size, needs_cjk=has_cjk(text))
 
 
+# Untertitel-Fläche (v1.40.1): Größe im PCS je Videoformat, wie tsMuxeR (TextToPGSConverter::enlargeCrop), aber bei
+# SD nach der Höhe. 1440×1080 hat die volle Fläche 1920×1080. Schrift und Abstand gelten für 1080 und werden mit der
+# Höhe der Fläche skaliert (Plan docs/plaene/untertitel-aufloesung.md).
+DEFAULT_CANVAS = (1920, 1080)
+BASE_FONT_SIZE = 48
+BASE_BOTTOM_MARGIN = 70
+BASE_OUTLINE = 3
+SIDE_MARGIN_SHARE = 0.05   # Text höchstens so breit, dass links und rechts je 5 % der Fläche frei bleiben
+
+
+def pgs_canvas(width: int, height: int) -> Tuple[int, int]:
+    """Untertitel-Fläche für ein Video: 1920×1080 (auch 1440×1080), 1280×720, 720×576 oder 720×480. Unbekannt
+    (0×0) → 1920×1080 wie bis v1.40.0."""
+    if not width or not height:
+        return DEFAULT_CANVAS
+    if width > 1280 or height > 720:
+        return 1920, 1080
+    if width > 720 or height == 720:
+        return 1280, 720
+    return (720, 576) if height > 480 else (720, 480)
+
+
+def pgs_squeeze(width: int, height: int, sar: Optional[str]) -> float:
+    """Waagerechter Faktor für den Text bei SD: Der Player zieht die 720 Pixel breite Fläche wie das Bild auf das
+    Seitenverhältnis (z. B. SAR 64:45 bei 16:9 PAL). Damit die Schrift auf dem Fernseher nicht verzerrt ist, wird sie
+    um 1/SAR gestaucht. HD hat quadratische Pixel auf der Fläche (1440×1080 liegt auf 1920×1080) → 1.0."""
+    if (width, height) != pgs_canvas(width, height) or width != 720 or not sar:
+        return 1.0
+    try:
+        num, den = (float(v) for v in str(sar).replace("/", ":").split(":", 1))
+    except ValueError:
+        return 1.0
+    if num <= 0 or den <= 0:
+        return 1.0
+    return den / num
+
+
+def read_sup_size(sup_path: str) -> Optional[Tuple[int, int]]:
+    """video_width × video_height aus der ersten PCS (Segment 0x16) einer .sup-Datei; None, wenn nicht lesbar."""
+    try:
+        with open(sup_path, "rb") as f:
+            data = f.read(64 * 1024)
+    except OSError:
+        return None
+    pos = 0
+    while pos + 13 <= len(data) and data[pos:pos + 2] == b"PG":
+        seg_type = data[pos + 10]
+        seg_len = struct.unpack(">H", data[pos + 11:pos + 13])[0]
+        if seg_type == 0x16 and seg_len >= 4 and pos + 17 <= len(data):
+            return struct.unpack(">HH", data[pos + 13:pos + 17])
+        pos += 13 + seg_len
+    return None
+
+
 def render_subtitle_image(
     text: str,
     font_size: int = 48,
-    outline_size: int = 3
+    outline_size: int = 3,
+    squeeze: float = 1.0
 ) -> Tuple[int, int, bytes, bytes]:
     """
     Rendert mehrzeiligen Untertiteltext in ein transparentes RGBA-Bild,
     erzeugt eine 8-Bit-PGS-Farbpalette mit vollständig transparentem
     Hintergrund und weichem Anti-Aliasing, und komprimiert via BD-ROM RLE.
+    squeeze < 1 staucht das Bild waagerecht (SD anamorph, siehe pgs_squeeze).
     Gibt (img_w, img_h, pds_payload_bytes, rle_data_bytes) zurück.
     """
     font = get_subtitle_font(text, font_size)
@@ -197,6 +253,10 @@ def render_subtitle_image(
         # 2. Text in Reinweiß
         draw.text((x_off, y_off), line, font=font, fill=(255, 255, 255, 255))
         y_off += line_h
+
+    if abs(squeeze - 1.0) > 0.001:
+        img_w = max(8, ((int(round(img_w * squeeze)) + 7) // 8) * 8)
+        img = img.resize((img_w, img_h), Image.LANCZOS)
 
     # RGBA-Pixel extrahieren
     if hasattr(img, "get_flattened_data"):
@@ -260,20 +320,33 @@ def build_sup_cue_bytes(
     comp_num: int = 0,
     font_size: int = 48,
     bottom_margin: int = 70,
-    fps: float = 23.976
+    fps: float = 23.976,
+    canvas: Tuple[int, int] = DEFAULT_CANVAS,
+    outline_size: int = BASE_OUTLINE,
+    squeeze: float = 1.0
 ) -> bytes:
     """
     Erzeugt die kompletten Binärdaten für eine Untertitel-Einblendung und
-    die anschließende Ausblendung im .sup Format.
+    die anschließende Ausblendung im .sup Format. canvas ist die Untertitel-Fläche (pgs_canvas).
     """
     start_pts = int(round(start_sec * 90000))
     end_pts = int(round(end_sec * 90000))
+    canvas_w, canvas_h = canvas
 
-    img_w, img_h, pds_bytes, rle_data = render_subtitle_image(text, font_size=font_size)
+    # Zu lange Zeilen: Schrift verkleinern, bis das Bild mit Rand auf die Fläche passt (ein Bild breiter als die
+    # Fläche verwirft der Player)
+    max_w = int(canvas_w * (1 - 2 * SIDE_MARGIN_SHARE))
+    size = font_size
+    while True:
+        img_w, img_h, pds_bytes, rle_data = render_subtitle_image(text, font_size=size, outline_size=outline_size,
+                                                                  squeeze=squeeze)
+        if img_w <= max_w or size <= 12:
+            break
+        size = max(12, int(size * 0.9))
 
     # Zentriert am unteren Bildschirmrand platzieren
-    x = max(0, (1920 - img_w) // 2)
-    y = max(0, 1080 - img_h - bottom_margin)
+    x = max(0, (canvas_w - img_w) // 2)
+    y = max(0, canvas_h - img_h - bottom_margin)
 
     # Koordinaten auf gerade Zahlen ausrichten
     x = (x // 2) * 2
@@ -286,7 +359,7 @@ def build_sup_cue_bytes(
     # -------------------------------------------------------------------------
     # PCS (Presentation Composition Segment, 0x16)
     pcs_payload = bytearray()
-    pcs_payload.extend(struct.pack(">HH", 1920, 1080)) # Video Width, Height
+    pcs_payload.extend(struct.pack(">HH", canvas_w, canvas_h)) # Video Width, Height
     pcs_payload.append(fps_to_pgs_rate_byte(fps))      # Frame Rate: dynamisch aus Projekt-FPS
     pcs_payload.extend(struct.pack(">H", comp_num & 0xFFFF))
     pcs_payload.append(0x80) # Composition State: Epoch Start
@@ -332,7 +405,7 @@ def build_sup_cue_bytes(
     # 2. CLEAR DISPLAY SET: Untertitel ausblenden (end_pts)
     # -------------------------------------------------------------------------
     clear_pcs = bytearray()
-    clear_pcs.extend(struct.pack(">HH", 1920, 1080))
+    clear_pcs.extend(struct.pack(">HH", canvas_w, canvas_h))
     clear_pcs.append(fps_to_pgs_rate_byte(fps))
     clear_pcs.extend(struct.pack(">H", (comp_num + 1) & 0xFFFF))
     clear_pcs.append(0x00) # Normal State
@@ -353,12 +426,25 @@ def convert_srt_to_sup(
     srt_path: str,
     sup_path: str,
     fps: float = 23.976,
-    font_size: int = 48,
-    log_callback: Optional[Callable[[str], None]] = None
+    font_size: Optional[int] = None,
+    log_callback: Optional[Callable[[str], None]] = None,
+    video_size: Optional[Tuple[int, int]] = None,
+    sar: Optional[str] = None
 ) -> str:
     """
     Konvertiert eine .srt-Datei vollständig in eine normgerechte .sup (PGS) Datei.
+    video_size (Breite, Höhe des Films) bestimmt die Untertitel-Fläche (pgs_canvas), sar bei SD die Stauchung der
+    Schrift. Ohne video_size wie bis v1.40.0: 1920×1080. font_size gilt für die Fläche; ohne Angabe 48 px bei 1080,
+    mit der Höhe skaliert.
     """
+    width, height = video_size or (0, 0)
+    canvas = pgs_canvas(width, height)
+    scale = canvas[1] / 1080
+    if font_size is None:
+        font_size = max(12, round(BASE_FONT_SIZE * scale))
+    bottom_margin = round(BASE_BOTTOM_MARGIN * scale)
+    outline_size = max(1, round(BASE_OUTLINE * scale))
+    squeeze = pgs_squeeze(width, height, sar)
     if log_callback:
         log_callback(f"Parse SRT: {os.path.basename(srt_path)}...")
 
@@ -382,7 +468,11 @@ def convert_srt_to_sup(
                 end_sec=end_sec,
                 comp_num=comp_num,
                 font_size=font_size,
-                fps=fps
+                bottom_margin=bottom_margin,
+                fps=fps,
+                canvas=canvas,
+                outline_size=outline_size,
+                squeeze=squeeze
             )
             f_out.write(cue_bytes)
 

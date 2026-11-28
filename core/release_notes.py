@@ -48,6 +48,22 @@ def date_text(release: Release, lang: str) -> str:
 
 
 RELEASES: Tuple[Release, ...] = (
+    Release("1.40.1", "2026-11-28",
+            de=Notes("Untertitel in der Größe des Films", (
+                "SRT-Untertitel werden jetzt in der Größe des Films umgewandelt: 720p und SD bekommen passende "
+                "Untertitel statt solcher für 1080p, die oft außerhalb des Bildes lagen. Bei SD in 16:9 wird die "
+                "Schrift nicht mehr breitgezogen.",
+                "Jeder Film bekommt seine Untertitel mit seiner eigenen Bildrate, nicht mehr mit der des ersten "
+                "Films.",
+                "Fertige .sup-Untertitel in einer anderen Größe als das Video erhalten eine Warnung.",
+            )),
+            en=Notes("Subtitles at the movie's size", (
+                "SRT subtitles are now converted at the movie's size: 720p and SD get matching subtitles instead of "
+                "1080p ones, which often ended up outside the picture. With SD in 16:9, the text is no longer "
+                "stretched.",
+                "Each movie gets its subtitles at its own frame rate, no longer at the first movie's.",
+                "Ready-made .sup subtitles in a different size than the video now get a warning.",
+            ))),
     Release("1.40.0", "2026-11-28",
             de=Notes("Richtige Bildrate, neue Lizenz", (
                 "Die Bildrate roher H.264-Videos (.264, .h264, .avc) wird jetzt aus dem Video selbst gelesen. "
