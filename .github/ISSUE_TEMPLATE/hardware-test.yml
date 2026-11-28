@@ -1,0 +1,113 @@
+name: Hardware test report
+description: Report how a disc made with OpenBDAuth plays on a real Blu-ray player (works or not, both help).
+title: "[Hardware test] <player model> · OpenBDAuth <version>"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing on real hardware! Reports go into [HARDWARE_TESTS.md](https://github.com/ZClassified/OpenBDAuth/blob/main/HARDWARE_TESTS.md).
+        Failures are just as useful as successes. English or German is fine.
+
+  - type: input
+    id: version
+    attributes:
+      label: OpenBDAuth version
+      description: Shown in the window title.
+      placeholder: "1.34.1"
+    validations:
+      required: true
+
+  - type: input
+    id: player
+    attributes:
+      label: Player
+      description: Brand and exact model; firmware version if you know it. Software players (VLC, PowerDVD …) also welcome.
+      placeholder: "Sony UBP-X700, firmware M35.R.0491"
+    validations:
+      required: true
+
+  - type: input
+    id: tv
+    attributes:
+      label: TV / display
+      description: Only needed for 3D or if the picture looks wrong.
+      placeholder: "LG OLED55E6V (3D)"
+
+  - type: dropdown
+    id: disc
+    attributes:
+      label: Disc type
+      multiple: true
+      options:
+        - 2D
+        - 3D (MVC)
+        - BD-25
+        - BD-50
+        - BD-R
+        - BD-RE
+        - Menu
+        - No menu
+    validations:
+      required: true
+
+  - type: textarea
+    id: burn
+    attributes:
+      label: How was the disc burned?
+      description: OS, burner (brand and model), media (brand and media ID if known), speed, and the tool (OpenBDAuth Burn tab, ImgBurn, xorriso …).
+      placeholder: |
+        Windows 11, HL-DT-ST BP40NS20 (USB), MediaRange BD-R 25 GB (CMCMAG-BA5-000), 4x, OpenBDAuth Burn tab, verify passed
+    validations:
+      required: true
+
+  - type: dropdown
+    id: play_2d
+    attributes:
+      label: Movie plays (2D)
+      options: ["✅ works", "⚠ works with issues", "❌ does not work", "– not tested"]
+    validations:
+      required: true
+
+  - type: dropdown
+    id: play_3d
+    attributes:
+      label: Movie plays (3D)
+      options: ["– not tested", "✅ works", "⚠ works with issues", "❌ does not work"]
+
+  - type: dropdown
+    id: menu
+    attributes:
+      label: Menu shows and buttons work
+      options: ["– not tested", "✅ works", "⚠ works with issues", "❌ does not work"]
+
+  - type: dropdown
+    id: pages
+    attributes:
+      label: Switching menu pages
+      options: ["– not tested", "✅ works", "⚠ works with issues", "❌ does not work"]
+
+  - type: dropdown
+    id: chapters
+    attributes:
+      label: Chapter skip (menu and "next chapter" key)
+      options: ["– not tested", "✅ works", "⚠ works with issues", "❌ does not work"]
+
+  - type: dropdown
+    id: tracks
+    attributes:
+      label: Audio / subtitle selection in the menu
+      options: ["– not tested", "✅ works", "⚠ works with issues", "❌ does not work"]
+
+  - type: textarea
+    id: details
+    attributes:
+      label: What happened?
+      description: For anything marked ⚠ or ❌, what exactly did you see, and where (which menu, which button, how far into the movie)? Photos of error messages help.
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and files (optional)
+      description: Burn log, export log or simulator output (`python tools/simulate_disc.py <disc> --struktur`). Drag files in here.

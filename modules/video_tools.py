@@ -8,6 +8,7 @@ Video-Tools für OpenBDAuth:
 import subprocess
 import os
 import json
+from fractions import Fraction
 from typing import Dict, List, Any, Optional
 
 from core.translations import tr
@@ -15,6 +16,40 @@ from modules.external_tools import find_tool, FFMPEG, FFPROBE, NO_CONSOLE
 
 
 WARNING_FIELDS = ("title", "message", "consequence", "recommendation")
+
+RAW_H264_EXTS = (".264", ".h264", ".avc")
+
+# Bildraten für tsMuxeR (v1.40.0): exakte Rate → Wert für fps=. Exakt 30 und 60 werden zu 29,97 und 59,94,
+# denn die Blu-ray kennt nur die NTSC-Raten (dazu der Hinweis EXACT_30_FPS).
+_BD_RATES = (
+    (Fraction(24000, 1001), 23.976), (Fraction(24), 24.0), (Fraction(25), 25.0),
+    (Fraction(30000, 1001), 29.97), (Fraction(30), 29.97), (Fraction(50), 50.0),
+    (Fraction(60000, 1001), 59.94), (Fraction(60), 59.94),
+)
+
+# Bildraten, die die Blu-ray bei 720p erlaubt (BD-ROM Part 3: 720p nur mit 23,976, 24, 50 und 59,94 fps)
+BD_720P_RATES = (23.976, 24.0, 50.0, 59.94)
+
+
+def is_raw_h264(path: str) -> bool:
+    """Roher H.264-Elementarstrom (kein Container): Bildrate steht nur im SPS."""
+    return str(path or "").lower().endswith(RAW_H264_EXTS)
+
+
+def bd_fps(rate: Fraction) -> float:
+    """Exakte Bildrate → Wert für tsMuxeR (23.976, 24, 25, 29.97, 50, 59.94); andere Raten auf 3 Stellen."""
+    for exact, value in _BD_RATES:
+        if abs(float(rate) - float(exact)) < 0.0005:
+            return value
+    return round(float(rate), 3)
+
+
+def doubled_rate_to_fps(fps: float) -> Optional[float]:
+    """47–48,5 fps aus ffprobe bei rohem H.264 ohne lesbares SPS: doppelte Rate von 24 bzw. 23,976 fps. Exakt 48
+    ist 24 fps, sonst 23,976 (bis v1.36.0 galt die Grenze ±0,1 – damit wurde auch 47,952 zu 24). None außerhalb."""
+    if 47.0 <= fps <= 48.5:
+        return 24.0 if abs(fps - 48.0) < 0.01 else 23.976
+    return None
 
 
 class ComplianceWarning:
@@ -148,10 +183,22 @@ class VideoTools:
             # Fallback auf Basis-Methode
             details["fps"] = self.get_fps(video_path, is_3d_hint=is_3d_hint)
 
+        # Roher H.264-Strom: Die Rate aus dem SPS gilt, nicht die von ffprobe (v1.40.0, siehe h264_frame_rate)
+        sps_rate = self.h264_frame_rate(video_path)
+        if sps_rate is not None:
+            details["fps_sps"] = f"{sps_rate.numerator}/{sps_rate.denominator}"
+            details["fps"] = self._sps_fps(sps_rate, is_3d_hint)
+
         # Compliance Check durchführen
         warnings = self.check_compliance(details)
         details["warnings"] = [w.to_dict() for w in warnings]
         return details
+
+    @staticmethod
+    def _sps_fps(rate: Fraction, is_3d_hint: bool) -> float:
+        """Rate aus dem SPS für tsMuxeR; 25 bei 3D wird wie im Veto-System zu 23,976 (3D kennt kein 1080p25)."""
+        fps = bd_fps(rate)
+        return 23.976 if fps == 25.0 and is_3d_hint else fps
 
     def _compute_effective_fps(self, fps_raw: str, height: int, is_3d_hint: bool = False) -> float:
         """Wendet das bewährte Veto- und Korrektursystem auf die Roh-Framerate an."""
@@ -180,10 +227,9 @@ class VideoTools:
             return 23.976
 
         # 2. Raw Stream Korrektur (23.976 / 24 fps verdoppelt -> 23.976 / 24.0)
-        if 47.0 <= fps <= 48.5:
-            if abs(fps - 48.0) < 0.1:
-                return 24.0
-            return 23.976
+        doubled = doubled_rate_to_fps(fps)
+        if doubled is not None:
+            return doubled
 
         # 3. 50/60 fps Unterscheidung:
         # 720p50 und 720p59.94 sind standardkonforme progressive Blu-ray-Formate!
@@ -199,6 +245,9 @@ class VideoTools:
 
     def get_fps(self, video_path: str, is_3d_hint: bool = False) -> float:
         """Kompatible Schnellmethode zur Ermittlung der FPS."""
+        sps_rate = self.h264_frame_rate(video_path)
+        if sps_rate is not None:
+            return self._sps_fps(sps_rate, is_3d_hint)
         try:
             ffprobe_path = self._get_ffprobe_path()
             cmd = [
@@ -224,9 +273,17 @@ class VideoTools:
         except Exception:
             return 23.976
 
-    @staticmethod
-    def _parse_sps_frame_mbs_only(sps_bytes: bytes) -> Optional[int]:
+    @classmethod
+    def _parse_sps_frame_mbs_only(cls, sps_bytes: bytes) -> Optional[int]:
         """Extrahiert frame_mbs_only_flag (0 = interlaced/PsF, 1 = progressive) aus bereinigten SPS-Bytes."""
+        sps = cls._parse_sps(sps_bytes)
+        return sps.get("frame_mbs_only") if sps else None
+
+    @staticmethod
+    def _parse_sps(sps_bytes: bytes) -> Optional[Dict[str, int]]:
+        """Liest aus bereinigten SPS-Bytes (ohne NAL-Kopf, ohne Emulation-Prevention-Bytes) frame_mbs_only_flag und,
+        falls vorhanden, die Zeitbasis aus den VUI-Daten: {"frame_mbs_only", "num_units_in_tick", "time_scale",
+        "fixed_frame_rate"}. Die Zeitbasis fehlt, wenn der Stream keine timing_info hat. None bei unlesbarem SPS."""
         try:
             class BitReader:
                 def __init__(self, data: bytes):
@@ -295,9 +352,67 @@ class VideoTools:
             br.read_bit() # gaps_in_frame_num_value_allowed_flag
             br.read_ue() # pic_width_in_mbs_minus1
             br.read_ue() # pic_height_in_map_units_minus1
-            return br.read_bit() # frame_mbs_only_flag
+            result = {"frame_mbs_only": br.read_bit()}
+            if not result["frame_mbs_only"]:
+                br.read_bit() # mb_adaptive_frame_field_flag
+            br.read_bit() # direct_8x8_inference_flag
+            if br.read_bit(): # frame_cropping_flag
+                for _ in range(4): br.read_ue()
+            if br.read_bit(): # vui_parameters_present_flag
+                if br.read_bit(): # aspect_ratio_info_present_flag
+                    if br.read_bits(8) == 255: # aspect_ratio_idc = Extended_SAR
+                        br.read_bits(32) # sar_width, sar_height
+                if br.read_bit(): # overscan_info_present_flag
+                    br.read_bit() # overscan_appropriate_flag
+                if br.read_bit(): # video_signal_type_present_flag
+                    br.read_bits(4) # video_format, video_full_range_flag
+                    if br.read_bit(): # colour_description_present_flag
+                        br.read_bits(24) # colour_primaries, transfer_characteristics, matrix_coefficients
+                if br.read_bit(): # chroma_loc_info_present_flag
+                    br.read_ue(); br.read_ue()
+                if br.read_bit() and br.byte_idx + 8 < len(br.data): # timing_info_present_flag
+                    result["num_units_in_tick"] = br.read_bits(32)
+                    result["time_scale"] = br.read_bits(32)
+                    result["fixed_frame_rate"] = br.read_bit()
+            return result
         except Exception:
             return None
+
+    @staticmethod
+    def _read_h264_header(video_path: str) -> bytes:
+        """Die ersten 256 KB einer Datei (SPS und x264-SEI stehen am Anfang); leer, wenn nicht lesbar."""
+        try:
+            if not os.path.isfile(video_path):
+                return b""
+            with open(video_path, "rb") as f:
+                return f.read(262144)
+        except OSError:
+            return b""
+
+    @classmethod
+    def _first_sps(cls, header_data: bytes) -> Optional[Dict[str, int]]:
+        """Das erste lesbare SPS (NAL-Typ 7) eines H.264-Elementarstroms, siehe _parse_sps."""
+        pos = 0
+        while True:
+            idx = header_data.find(b"\x00\x00\x01", pos)
+            if idx == -1 or idx + 3 >= len(header_data):
+                return None
+            if header_data[idx + 3] & 0x1F == 7:
+                nxt = header_data.find(b"\x00\x00\x01", idx + 3)
+                sps_raw = header_data[idx + 4:nxt] if nxt != -1 else header_data[idx + 4:idx + 200]
+                clean = bytearray()
+                k = 0
+                while k < len(sps_raw):
+                    if k + 2 < len(sps_raw) and sps_raw[k] == 0 and sps_raw[k + 1] == 0 and sps_raw[k + 2] == 3:
+                        clean.extend(sps_raw[k:k + 2])
+                        k += 3
+                    else:
+                        clean.append(sps_raw[k])
+                        k += 1
+                sps = cls._parse_sps(bytes(clean))
+                if sps is not None:
+                    return sps
+            pos = idx + 3
 
     @classmethod
     def _detect_h264_psf(cls, video_path: str) -> bool:
@@ -306,40 +421,32 @@ class VideoTools:
         1. Schneller Header-Check auf x264 SEI Optionen (interlaced=fake).
         2. Bitstream-Analyse des H.264 Sequence Parameter Sets (frame_mbs_only_flag == 0).
         """
+        header_data = cls._read_h264_header(video_path)
+        if b"interlaced=fake" in header_data:
+            return True
         try:
-            if not os.path.exists(video_path) or not os.path.isfile(video_path):
-                return False
-            with open(video_path, "rb") as f:
-                header_data = f.read(262144) # Erste 256 KB
-            if b"interlaced=fake" in header_data:
-                return True
-            pos = 0
-            while True:
-                idx = header_data.find(b"\x00\x00\x01", pos)
-                if idx == -1: break
-                if idx + 3 < len(header_data):
-                    nal_type = header_data[idx + 3] & 0x1F
-                    if nal_type == 7: # SPS
-                        nxt = header_data.find(b"\x00\x00\x01", idx + 3)
-                        sps_raw = header_data[idx + 4:nxt] if nxt != -1 else header_data[idx + 4:idx + 120]
-                        clean = bytearray()
-                        k = 0
-                        while k < len(sps_raw):
-                            if k + 2 < len(sps_raw) and sps_raw[k] == 0 and sps_raw[k + 1] == 0 and sps_raw[k + 2] == 3:
-                                clean.extend(sps_raw[k:k + 2])
-                                k += 3
-                            else:
-                                clean.append(sps_raw[k])
-                                k += 1
-                        flag = cls._parse_sps_frame_mbs_only(clean)
-                        if flag == 0:
-                            return True
-                        elif flag == 1:
-                            return False
-                pos = idx + 3
+            sps = cls._first_sps(header_data)
         except Exception:
-            pass
-        return False
+            return False
+        return bool(sps) and sps.get("frame_mbs_only") == 0
+
+    @classmethod
+    def h264_frame_rate(cls, video_path: str) -> Optional[Fraction]:
+        """Bildrate eines rohen H.264-Stroms aus dem SPS (v1.40.0): time_scale / (2 · num_units_in_tick), denn ein
+        Tick ist ein Halbbild. None ohne Zeitbasis im SPS oder bei unlesbarer Datei.
+
+        ffprobe meldet bei rohem H.264 als r_frame_rate genau diesen Quotienten ohne die Halbierung, also die
+        doppelte Bildrate (48000/1001 bei 23,976 fps, 60000/1001 bei 29,97 fps), und als avg_frame_rate immer 25.
+        Die Raten von ffprobe zu deuten führte zu falschen Bildraten (Trailer mit 29,97 fps lief doppelt so schnell)."""
+        if not is_raw_h264(video_path):
+            return None
+        try:
+            sps = cls._first_sps(cls._read_h264_header(video_path))
+        except Exception:
+            return None
+        if not sps or not sps.get("num_units_in_tick") or not sps.get("time_scale"):
+            return None
+        return Fraction(sps["time_scale"], 2 * sps["num_units_in_tick"])
 
     def check_compliance(self, video_details: Dict[str, Any]) -> List[ComplianceWarning]:
         """
@@ -429,11 +536,19 @@ class VideoTools:
         # 4. PRÜFUNG: EXAKT 30 / 60 FPS STATT 29.97 / 59.94
         # -------------------------------------------------------------
         # Die Blu-ray kennt nur die NTSC-Raten; die Disc spielt das Bild 0,1 % langsamer ab, der Ton nicht.
-        raw = self._parse_rate(video_details.get("fps_raw", ""))
+        sps = self._parse_rate(video_details.get("fps_sps", ""))
+        raw = sps if sps is not None else self._parse_rate(video_details.get("fps_raw", ""))
         if raw is not None and (abs(raw - 30.0) < 0.001 or abs(raw - 60.0) < 0.001):
-            exact = raw / 2 if fps < raw * 0.75 else raw   # 1080i: 60 Halbbilder = 30 Vollbilder
+            # ffprobe: bei 1080i sind 60 Halbbilder 30 Vollbilder; die Rate aus dem SPS ist schon die Bildrate
+            exact = raw / 2 if sps is None and fps < raw * 0.75 else raw
             warnings.append(ComplianceWarning.of("EXACT_30_FPS", fps=f"{exact:.0f}",
                                                  ntsc=f"{exact * 1000 / 1001:.2f}", num=f"{exact * 1000:.0f}"))
+
+        # -------------------------------------------------------------
+        # 5. PRÜFUNG: 720p NUR MIT 23,976 / 24 / 50 / 59,94 FPS (v1.40.0)
+        # -------------------------------------------------------------
+        if width == 1280 and height == 720 and not any(abs(fps - r) < 0.01 for r in BD_720P_RATES):
+            warnings.append(ComplianceWarning.of("UNOFFICIAL_720P_RATE", fps=f"{fps:g}"))
 
         return warnings
 

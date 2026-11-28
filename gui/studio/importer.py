@@ -5,7 +5,7 @@ MVC, Tonspuren (Vorbereitung im Hintergrund), Untertitel und Kapitel (EDL).
 """
 
 import os
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple
 
 from PySide6.QtCore import QObject, QThread, Signal, QPointF
 
@@ -97,7 +97,7 @@ class FilmImporter(QObject):
         return film_id
 
     # --- Einzelne Dateiarten ------------------------------------------------------
-    def set_video(self, film_id: str, path: str):
+    def set_video(self, film_id: str, path: str, text: str = "Video wählen"):
         film = self.controller.project.film(film_id)
         if film is None:
             return
@@ -109,7 +109,7 @@ class FilmImporter(QObject):
             warnings = warnings + result.get("warnings", [])
             details = {**(details or {}), **result.get("details", {})}
         self.controller.set_film_fields(
-            film_id, "Video wählen",
+            film_id, text,
             video_base=path,
             video_details=details,
             fps=details.get("fps", film.fps) if details else film.fps,
@@ -118,6 +118,28 @@ class FilmImporter(QObject):
         )
         if warnings:
             self.compliance_warnings.emit(film_id)
+
+    def correct_frame_rates(self) -> List[Tuple[str, float, float]]:
+        """Bildraten älterer Projekte nachprüfen (v1.40.0): Bei rohem H.264 gilt die Rate aus dem SPS. Bis v1.36.0
+        wurde sie aus den Werten von ffprobe geraten, 23,976 fps wurde dabei zu 24 und 720p mit 29,97 fps zu 59,94.
+        Weicht die gespeicherte Rate ab, wird das Video neu analysiert (ein Rückgängig-Schritt je Film, das Projekt
+        gilt danach als geändert). Gibt (Film, alte Rate, neue Rate) der korrigierten Filme zurück."""
+        from modules.video_tools import VideoTools
+        fixes = []
+        for film in list(self.controller.project.films):
+            path = film.video_base
+            rate = VideoTools.h264_frame_rate(path) if path and os.path.isfile(path) else None
+            if rate is None:
+                continue
+            old = float(film.fps)
+            new = VideoTools._sps_fps(rate, bool(film.video_mvc))
+            if abs(new - old) < 0.0005:
+                continue
+            self.set_video(film.id, path, text="Bildrate korrigieren")
+            corrected = self.controller.project.film(film.id)
+            if corrected is not None and abs(float(corrected.fps) - old) >= 0.0005:
+                fixes.append((film.name, old, float(corrected.fps)))
+        return fixes
 
     def set_mvc(self, film_id: str, path: Optional[str]):
         film = self.controller.project.film(film_id)
